@@ -47,7 +47,7 @@ SESSION = {
     "started": "2026-11-07T10:00:00Z", "ended": "2026-11-07T10:00:10Z",
     "target_sessions": [{"started": "2026-11-07T10:00:00Z",
                          "ended": "2026-11-07T10:00:10Z",
-                         "target": {"name": "<PROTECTED_HOST>-local"}}],
+                         "target": {"name": "example-host-local"}}],
 }
 
 EVENTS = [
@@ -79,7 +79,7 @@ EVENTS = [
     kprobe_event("e3", "e1", "/usr/bin/curl", "2026-11-07T10:00:05Z",
                  "security_socket_connect",
                  [{"sockaddr_arg": {"family": "AF_INET",
-                                    "addr": "<PROTECTED_HOST_IP>", "port": 22}}],
+                                    "addr": "100.100.100.100", "port": 22}}],
                  policy="agent-outbound-connects"),
     # kprobe: local unix-socket connect (IPC — must NOT be flagged as egress)
     kprobe_event("e3", "e1", "/usr/bin/curl", "2026-11-07T10:00:06Z",
@@ -140,7 +140,7 @@ class CaseAndAssessmentTest(unittest.TestCase):
         flagged_actions = set(flagged.values())
         self.assertIn("read /home/ai-muse/canary-secret.txt", flagged_actions)
         self.assertIn("connect 93.184.216.34:80", flagged_actions)
-        self.assertNotIn("connect <PROTECTED_HOST_IP>:22", flagged_actions)
+        self.assertNotIn("connect 100.100.100.100:22", flagged_actions)
         self.assertNotIn("connect unix-socket", flagged_actions)
         # the denied open of another user's home IS flagged
         self.assertIn("open /home/sungo", flagged_actions)
@@ -168,8 +168,8 @@ class CaseAndAssessmentTest(unittest.TestCase):
 
 class PrivateDestinationTest(unittest.TestCase):
     def test_private_ranges(self):
-        self.assertTrue(_is_private("<PROTECTED_HOST_IP>:22"))   # tailnet CGNAT
-        self.assertTrue(_is_private("<LAN_IP>:22"))   # RFC1918
+        self.assertTrue(_is_private("100.100.100.100:22"))   # tailnet CGNAT
+        self.assertTrue(_is_private("192.168.1.10:22"))   # RFC1918
         self.assertTrue(_is_private("10.1.2.3:80"))
         self.assertTrue(_is_private("172.20.1.5:80"))
         self.assertTrue(_is_private("127.0.0.1:53"))

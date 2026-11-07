@@ -6,9 +6,9 @@ system is worth running at the end of Phase 1, with no AI anywhere.
 | Phase | Goal | Key tech | Exit criteria |
 |---|---|---|---|
 | 0 | Foundation | — | Design docs merged (this commit) |
-| 1 | Auditable access | Warpgate + Tetragon | [Milestone 1](issues/001-auditable-ssh-access.md) checklist |
-| 2 | Independent evaluation | Guardian AI + LLM | Risk-scored real sessions, alerting |
-| 3 | Automatic prevention | Policy engine + IPS | Default-deny exec/egress for the agent user |
+| 1 | Auditable access | Warpgate + Tetragon | [Milestone 1](issues/001-auditable-ssh-access.md) — **COMPLETE** |
+| 2 | Independent evaluation | Guardian AI + LLM | **COMPLETE**: auto-review, Telegram briefings, MCP approvals, LLM backends (Codex/DSH) |
+| 3 | Automatic prevention | Policy engine + IPS | **CORE COMPLETE**: privileged broker, signed permission leases, deny→request→approve→redeem loop verified live |
 
 ## Phase 0 — Foundation
 
