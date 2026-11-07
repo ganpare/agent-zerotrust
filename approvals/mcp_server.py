@@ -221,9 +221,19 @@ def callback_poller(config):
                 continue
             if decision not in ("approve", "deny"):
                 continue
-            view, changed = service.decide(rid, "approved"
-                                            if decision == "approve"
-                                            else "denied")
+            try:
+                view, changed = service.decide(rid, "approved"
+                                                if decision == "approve"
+                                                else "denied")
+            except Exception as exc:
+                print(f"mcp: decide failed for {rid}: {type(exc).__name__}",
+                      file=sys.stderr)
+                try:
+                    answer_callback(config, cb["id"],
+                                    "内部エラーです。もう一度押してください。")
+                except TelegramConfigError:
+                    pass
+                continue
             ja = {"approved": "✅ 承認されました",
                   "denied": "🚫 拒否されました",
                   "pending": "処理中…", "expired": "期限切れです",

@@ -122,6 +122,7 @@ def get_request(request_id: str) -> dict | None:
         "expires_at": req["expires_at"],
         "op_class": req.get("op_class", ""),
         "op_args": req.get("op_args", {}),
+        "max_uses": req.get("max_uses", 1),
         "denial_id": req.get("denial_id", ""),
         "assessment": assessment,
         "decision": decision,
