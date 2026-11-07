@@ -20,3 +20,7 @@ evidence/
 
 # Local deployment state
 deploy/*/local/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
