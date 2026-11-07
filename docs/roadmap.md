@@ -53,6 +53,10 @@ Exit criteria: the acceptance checklist in
 - Policy verdict **"ask"**: human-in-the-loop gating between allow and
   deny — single-use, action-bound approval tokens over the Telegram
   adapter; fail closed on timeout ([architecture.md](architecture.md) §8)
+- Denial-driven requests: a policy denial carries a machine-readable
+  reason pointing at `request_approval` — any error-handling agent can
+  follow it, no special integration needed
+  ([architecture.md](architecture.md) §8.1)
 - Rollout: **detect-only → ask → enforce** — never straight to blocking
 - Kill switch: revoke an agent's access without logging into the protected
   host

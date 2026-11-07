@@ -52,7 +52,7 @@ no network path to it — boundary (5) in the threat model.
 | Evidence pipeline | evidence | Ships recordings + events off-host, one-way; append-only for the agent | SR3 |
 | Evidence store | evidence | Holds recordings and events; encrypted at rest; access logged; retention policy | SR4 |
 | Guardian AI | analysis | *Optional.* Consumes the correlated evidence timeline; produces risk scores, anomaly reports, narrative explanation | SR5 |
-| Approval service | response | *Phase 2–3.* Packages approval requests — from the agent (MCP `request_approval`) or from the policy engine's "ask" verdict — routes them to the human over a channel adapter (Telegram first), issues single-use, action-bound tokens | SR8, SR9 |
+| Approval service | response | *Phase 2–3.* Packages approval requests — proactive (MCP `request_approval`) or denial-driven (the policy's "ask" verdict) — routes them to a pluggable decider over a channel adapter (Telegram first), issues single-use, action-bound tokens via the async protocol (§8) | SR8, SR9 |
 | IDS / IPS | response | Phase 1–2: notify. Phase 3: block via Tetragon enforcement actions + network policy | — |
 
 ## 3. The core problem: correlation
@@ -123,49 +123,108 @@ The system degrades to its floor, never below it:
 
 ## 8. Human-in-the-loop approvals (design note)
 
-Status: **idea stage** — captured early because it shapes Phases 2–3.
-Open to better alternatives (open question at the end).
+Status: **design stage** — the MCP surface and the async protocol are
+decided; open questions at the end.
 
 Detection and blocking are the two ends of a ladder. Between them sits
-**asking the human**:
+**asking the human**.
+
+### 8.1 Trigger paths
 
 ```text
- agent ──MCP──▶ request_approval(action, justification)
-                    │
- approval service + Guardian AI package the context:
-   session · exact command/target · correlated evidence · risk note
-                    │
-        channel adapter (Telegram first)
-                    │   [Approve] [Deny]   ← inline buttons
-                    │
- Approve ────────▶ single-use, short-TTL token,
-                   bound to the exact action + session
- Deny / timeout ─▶ fail closed
-                    │
- approval record ─▶ evidence store (approvals are evidence too)
+ (a) proactive      the agent anticipates: "the next step needs sudo /
+                    deletes a directory / opens a new destination"
+                    → calls request_approval first
+
+ (b) denial-driven  the agent tries; policy denies with a machine-readable
+                    reason, e.g.
+                    "blocked by policy: action requires approval —
+                     call request_approval(action, justification), then
+                     retry"
+                    → agent asks, then retries the exact action
+
+ (b) is the universal one: it needs zero agent-side policy knowledge —
+     the denial itself is the integration surface, so any error-handling
+     agent can follow it. (a) remains a nicety for well-behaved agents.
 ```
 
-Key properties:
+### 8.2 Async approval protocol
+
+MCP tool calls are request/response (JSON-RPC over stdio or HTTP). A
+server may in principle hold a call open — there is even a
+progress-notification mechanism — but client timeouts vary, and a human
+may answer in minutes or hours. Holding an agent's tool call open for a
+human-scale wait is fragile. So the protocol is **async**:
+
+```text
+ request_approval(action, justification)
+   ─▶ returns immediately:
+      {status: pending, request_id, expires_at}
+
+ ... the human approves whenever they see it ...
+      (request TTL is human-scale: hours, configurable)
+
+ agent:  poll get_approval(request_id)   ← each poll is a normal call
+      or simply retry the action         ← the natural agent behavior
+
+ on grant ─▶ single-use token, bound to (agent identity, exact action),
+             redeemable within the grant TTL (bounded, e.g. 1 h)
+             → the retry succeeds; anything else stays denied
+
+ deny / request TTL expired / channel loss ─▶ fail closed
+```
+
+Two distinct TTLs, by design:
+
+- **Request TTL** — how long a request stays open. Human-scale (hours),
+  because approvals arrive whenever the human gets to them.
+- **Grant TTL** — how long a granted token stays redeemable. Bounded and
+  short, because it gates live execution.
+
+A late approval is therefore harmless: the request simply stays pending
+until the human answers, and the agent redeems the grant by retrying —
+in this session or a later one, since the token binds to the agent
+identity, not to the session that asked.
+
+### 8.3 Key properties
 
 - **Approval binding.** The human approves *the gateway's view of the
   action*, not the agent's description of it. A token unlocks exactly the
-  approved action in that session — nothing else. This is why *enforced*
-  approvals need Phase 1 correlation and Phase 3 enforcement; before
-  that, MCP approval is advisory (agent-cooperative) only.
-- **Fail closed.** No answer within the TTL means denied. Channel loss
-  means denied.
-- **Single-use, short-TTL tokens.** No replay. No blanket approvals —
-  unless explicitly scoped (e.g. "allow this destination for 1 h").
+  approved action for the requesting agent — nothing else. This is why
+  *enforced* approvals need Phase 1 correlation and Phase 3 enforcement;
+  before that, MCP approval is advisory (agent-cooperative) only.
+- **Fail closed.** Deny, request-TTL expiry, channel loss — all mean
+  denied.
+- **Single-use tokens.** No replay. No blanket approvals — unless
+  explicitly scoped (e.g. "allow this destination for 1 h").
 - **No secrets in the channel.** The briefing carries actions and
   context, never secret values — Telegram is third-party infrastructure.
 - **Telegram is an adapter, not the design.** The channel interface stays
   generic; Telegram is the first implementation (push + inline buttons).
 - **Approvals are evidence.** Every request and decision is a record in
   the evidence store.
+- **Pluggable decider.** The decision-maker behind a request is an
+  interface: **human** (the default, and the only decider initially) or,
+  later, an authorized auto-approver on the guardian side. Separation of
+  authority applies to the latter: it runs on the monitoring host —
+  outside the acting agent's reach — may decide only within
+  policy-defined risk classes, and every grant it makes is logged
+  evidence. Auto-approval is opt-in per risk class; everything else
+  stays human-only.
+
+### 8.4 Phase placement
+
+- **Phase 2** — Telegram as the IDS alert channel; proactive, advisory
+  `request_approval` (no enforcement yet).
+- **Phase 3** — the policy verdict **"ask"**: denial-driven, enforced
+  gating; retry-with-token redemption.
 
 Rollout ladder: **detect-only → ask → enforce.**
 
-Open question: is MCP the right agent-side surface (vs. a CLI tool on the
-target, or the guardian agent requesting autonomously)? Current bet: MCP —
-it keeps agent integration standard, and lets the judging agent enrich the
-request with context before it reaches the human.
+### 8.5 Open questions
+
+- Which risk classes may a future auto-approver decide alone, and which
+  stay human-only?
+- Do non-MCP agents need a CLI fallback (`azt request-approval ...`)?
+- How does a granted-but-unredeemed token surface in the evidence store —
+  request, grant, and redemption should be three distinct records.
