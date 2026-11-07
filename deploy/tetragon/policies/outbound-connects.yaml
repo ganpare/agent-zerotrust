@@ -14,6 +14,11 @@ spec:
           type: "int"
           source: "current_task"
           resolve: "cred.uid.val"
+      # Extract the destination address so connect events carry WHERE,
+      # not just THAT a connection happened.
+      args:
+        - index: 1
+          type: "sockaddr"
       selectors:
         - matchData:
             - index: 0
