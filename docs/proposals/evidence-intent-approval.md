@@ -89,7 +89,7 @@ Use a policy-based ladder rather than a hard allow/deny binary:
 | **ALLOW** | Continue, record as configured | edits within an explicitly allowed workspace |
 | **ASK** | Ordinary asynchronous approval | package installation needing added privileges |
 | **ELEVATED ASK** | Stronger warning, richer evidence, optional reauthentication or confirmation | adding an SSH-capable OS account |
-| **DENY** | In-band exception unavailable; human administrator may use a separate break-glass administration path | tampering with the evidence store or the enforcement policy |
+| **DENY** | In-band exception unavailable; human administrator may use a separate break-glass administration path | tampering with the broker, enforcement policy, or gateway configuration on the protected host (the off-host evidence store is already unreachable per SR3) |
 
 The same operation can have different risk depending on target, context, requested scope, or privileges. Avoid flooding the owner with routine prompts. Let deterministic policy decide the minimum review tier; Guardian AI may recommend *more* scrutiny, but must not independently downgrade a mandatory tier. In the first version, human approval is authoritative.
 
