@@ -66,19 +66,58 @@ def split_message(text: str) -> list[str]:
     return chunks
 
 
-def send_message(config: dict, text: str) -> None:
+def send_message(config: dict, text: str, reply_markup: dict | None = None) -> int | None:
+    """Send a message; returns the message_id (needed for edits)."""
+    last_id = None
     for chunk in split_message(text):
-        body = json.dumps({"chat_id": config["chat_id"], "text": chunk}).encode()
+        body = {"chat_id": config["chat_id"], "text": chunk}
+        if reply_markup is not None and chunk is split_message(text)[-1]:
+            body["reply_markup"] = reply_markup
         req = urllib.request.Request(
             f"{API_BASE}{config['bot_token']}/sendMessage",
-            data=body, headers={"Content-Type": "application/json"}, method="POST")
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=20) as resp:
-                resp.read()
+                data = json.loads(resp.read())
+                last_id = data.get("result", {}).get("message_id", last_id)
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode(errors="replace")[:200]
             raise TelegramConfigError(
                 f"Telegram API error {exc.code}: {detail}") from exc
+    return last_id
+
+
+def api_call(config: dict, method: str, params: dict, timeout: int = 30) -> dict:
+    req = urllib.request.Request(
+        f"{API_BASE}{config['bot_token']}/{method}",
+        data=json.dumps(params).encode(),
+        headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")[:200]
+        raise TelegramConfigError(
+            f"Telegram API error {exc.code}: {detail}") from exc
+
+
+def answer_callback(config: dict, callback_query_id: str, text: str) -> None:
+    api_call(config, "answerCallbackQuery",
+             {"callback_query_id": callback_query_id, "text": text})
+
+
+def edit_message(config: dict, chat_id, message_id: int, text: str) -> None:
+    api_call(config, "editMessageText",
+             {"chat_id": chat_id, "message_id": message_id, "text": text})
+
+
+def get_updates(config: dict, offset: int, timeout: int = 25) -> list:
+    """Long-poll for updates (callback buttons); returns the update list."""
+    return api_call(config, "getUpdates",
+                    {"offset": offset, "timeout": timeout,
+                     "allowed_updates": json.dumps(["callback_query"])},
+                    timeout=timeout + 10).get("result", [])
 
 
 def format_briefing(result: dict) -> str:
@@ -156,6 +195,59 @@ def format_briefing(result: dict) -> str:
     lines.append("")
     lines.append("この通知は参考情報です。承認はゲートウェイでのみ行われます。")
     return "\n".join(lines)
+
+
+def format_request_briefing(result: dict, request: dict) -> str:
+    """Render an approval REQUEST briefing (ja) — with the claim clearly
+    labeled as untrusted agent-supplied text (T12 briefing discipline)."""
+    a = result.get("assessment", {})
+    consistency = a.get("consistency", "?")
+    consistency_ja = {"aligned": "整合", "partial": "部分整合",
+                      "mismatch": "不整合",
+                      "insufficient_evidence": "証拠不足"}.get(consistency,
+                                                               consistency)
+    next_step = a.get("suggested_next_step", "?")
+    next_step_ja = {"review": "人間レビュー", "clarify": "確認要求",
+                   "escalate": "エスカレーション"}.get(next_step, next_step)
+
+    lines = [
+        "agent-zerotrust — 承認リクエスト",
+        f"リクエスト: {request.get('request_id', '?')}",
+        "",
+        "申告（エージェントによる・未検証）:",
+        f"  操作: {request.get('action', '?')}",
+        f"  理由: {request.get('justification', '?')}",
+        "",
+        "証拠（直近のセッションコンテキスト）:",
+    ]
+    for ev in result.get("evidence", [])[:12]:
+        lines.append(f"  [{ev.get('source', '?')}] {ev.get('action', '?')}")
+    lines += [
+        "",
+        f"評価: {consistency}（{consistency_ja}）",
+        f"  {a.get('summary', '')}",
+    ]
+    flagged = {ev.get("event_id"): ev.get("action")
+               for ev in result.get("evidence", [])}
+    flags = [flagged.get(eid, eid) for eid in a.get("evidence_ids", [])]
+    if flags:
+        lines.append("フラグ:")
+        for f in dict.fromkeys(flags):
+            lines.append(f"  ! {f}")
+    lines.append(f"次の一手: {next_step}（{next_step_ja}）")
+    for u in a.get("uncertainties", []):
+        lines.append(f"不確実性: {u}")
+    lines.append("")
+    lines.append("ボタンで承認/拒否を記録できます（アドバイザリ）。"
+                 "OS権限の付与はPhase 3で実装されます。")
+    return "\n".join(lines)
+
+
+def request_keyboard(request_id: str) -> dict:
+    return {"inline_keyboard": [[
+        {"text": "✅ 承認", "callback_data": f"approve:{request_id}"},
+        {"text": "🚫 拒否", "callback_data": f"deny:{request_id}"},
+    ]]}
 
 
 def main(argv=None) -> int:

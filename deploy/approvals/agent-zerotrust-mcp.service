@@ -1,0 +1,15 @@
+[Unit]
+Description=agent-zerotrust: MCP approvals server (agent-facing control plane)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=sungo
+WorkingDirectory=/mnt/ssd2tb/projects/Zero-trust
+ExecStart=/usr/bin/python3 -u -m approvals.mcp_server
+Environment=APPROVAL_PORT=8930
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
