@@ -43,7 +43,9 @@ def _records() -> list[dict]:
 
 
 def create_request(request_id: str, action: str, justification: str,
-                   session_id: str, ttl_seconds: int = 7200) -> dict:
+                   session_id: str, ttl_seconds: int = 7200,
+                   op_class: str = "", op_args: dict | None = None,
+                   denial_id: str = "", max_uses: int = 1) -> dict:
     now = time.time()
     record = {
         "type": "request",
@@ -54,9 +56,19 @@ def create_request(request_id: str, action: str, justification: str,
         "created_at": now,
         "expires_at": now + ttl_seconds,
         "claim_version": 1,
+        "op_class": op_class or "",
+        "op_args": op_args or {},
+        "denial_id": denial_id or "",
+        "max_uses": max(1, min(int(max_uses or 1), 10)),
     }
     _append(record)
     return record
+
+
+def add_lease(request_id: str, lease_id: str, token: str) -> None:
+    _append({"type": "lease", "request_id": request_id,
+            "lease_id": lease_id, "token": token,
+            "minted_at": time.time()})
 
 
 def add_assessment(request_id: str, assessment: dict) -> None:
@@ -97,14 +109,24 @@ def get_request(request_id: str) -> dict | None:
         status = "expired"
     else:
         status = "pending"
+    lease = None
+    for rec in _records():
+        if (rec.get("type") == "lease"
+                and rec.get("request_id") == request_id):
+            lease = rec  # latest wins
     return {
         "request_id": request_id,
         "action": req["action"],
         "justification": req["justification"],
         "created_at": req["created_at"],
         "expires_at": req["expires_at"],
+        "op_class": req.get("op_class", ""),
+        "op_args": req.get("op_args", {}),
+        "denial_id": req.get("denial_id", ""),
         "assessment": assessment,
         "decision": decision,
+        "lease": ({"lease_id": lease["lease_id"],
+                   "token": lease["token"]} if lease else None),
         "status": status,
     }
 

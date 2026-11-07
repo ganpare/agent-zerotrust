@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""azt-broker — the agent-facing CLI for privileged operations (installed)."""
+import sys
+sys.path.insert(0, "/mnt/ssd2tb/projects/Zero-trust")
+from broker.client import main
+raise SystemExit(main())

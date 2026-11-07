@@ -50,6 +50,20 @@ TOOLS = [
                            "description": "the exact action to approve"},
                 "justification": {"type": "string",
                                    "description": "why it is needed"},
+                "op_class": {"type": "string",
+                              "description": "structured op: "
+                              "systemctl-restart | systemctl-start | "
+                              "systemctl-stop (enables lease redemption "
+                              "on approval)"},
+                "op_args": {"type": "object",
+                            "description": "e.g. {\"unit\": "
+                            "\"training-web.service\"}"},
+                "denial_id": {"type": "string",
+                              "description": "the DN-... id from the "
+                              "broker denial, if this request follows one"},
+                "max_uses": {"type": "integer",
+                              "description": "proposed lease use count "
+                              "(1-10, default 1)"},
             },
             "required": ["action", "justification"],
         },
@@ -93,9 +107,21 @@ def dispatch(method: str, params: dict, env: dict) -> tuple[dict | None, int]:
             if not action or not justification:
                 return _error_result(
                     "action and justification are required"), 200
-            view = service.request_approval(
-                action, justification,
-                env["admin_password"], env["events_dir"])
+            op_class = str(args.get("op_class", "")).strip()
+            op_args = args.get("op_args") or {}
+            denial_id = str(args.get("denial_id", "")).strip()
+            try:
+                max_uses = int(args.get("max_uses", 1))
+            except (TypeError, ValueError):
+                max_uses = 1
+            try:
+                view = service.request_approval(
+                    action, justification,
+                    env["admin_password"], env["events_dir"],
+                    op_class=op_class, op_args=op_args,
+                    denial_id=denial_id, max_uses=max_uses)
+            except ValueError as exc:
+                return _error_result(str(exc)), 200
             return _tool_result(view), 200
         if name == "get_approval":
             rid = str(args.get("request_id", "")).strip()

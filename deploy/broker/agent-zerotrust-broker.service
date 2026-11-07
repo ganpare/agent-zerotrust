@@ -1,0 +1,14 @@
+[Unit]
+Description=agent-zerotrust: privileged broker (enforcement point)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/ssd2tb/projects/Zero-trust
+ExecStart=/usr/bin/python3 -u -m broker.server
+Restart=on-failure
+RestartSec=5
+RuntimeDirectory=agent-zerotrust
+
+[Install]
+WantedBy=multi-user.target
