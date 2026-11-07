@@ -68,6 +68,16 @@ Phase 1 deployment.
   not writable (contains credentials — gitignored). Backend failures
   degrade to `unavailable` + human review (fail-safe, exercised for
   real during bring-up).
+- **`watch.py` — the auto-watcher** (closes the Phase 2 loop): polls
+  warpgate for newly completed `muse` sessions, reviews each one, and
+  sends the Telegram briefing automatically — no manual run needed.
+  Baseline semantics: the first pass marks all existing sessions as
+  reviewed without notifying; only sessions that complete afterwards
+  trigger briefings. Deployed on the protected host as
+  `agent-zerotrust-watch.service`
+  ([deploy/monitoring/agent-zerotrust-watch.service](../deploy/monitoring/agent-zerotrust-watch.service),
+  60s interval, unbuffered stdout). Backend follows `GUARDIAN_BACKEND`
+  (default: rule).
 - **Post-hoc reviews carry a placeholder claim** (clearly marked), so the
   assessment honestly reports `insufficient_evidence` for consistency —
   the four-record model does not pretend a comparison happened.
