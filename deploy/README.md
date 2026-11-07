@@ -92,6 +92,11 @@ monitoring host.
       T4 connect captured, T6 evidence unreadable/undeletable,
       collector read-only); T5 rule verified active via privileged
       check
+- [x] **Kill switch verified**: revoking the `ai-muse` role from the
+      `muse` user via the warpgate admin API (the same path <MONITORING_HOST>
+      uses over Tailscale — no host login) immediately denies access;
+      restoring the role restores it. Access revocation never requires
+      logging into the protected host.
 
 ## Hardening notes (not blocking Milestone 1)
 
