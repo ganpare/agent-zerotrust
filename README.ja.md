@@ -6,14 +6,18 @@
 
 AIエージェントにマシンへの本物のアクセスを与える — ただし、信用はしない。
 
-`agent-zerotrust` は、AIエージェント（Muse、Claude Code、Codex、Hermes、…）に
-ローカル環境への**監査可能で制約されたアクセス**を提供し、事後に「実際に
-何をしたのか」を証明できるようにする、オープンな共通基盤です。
+`agent-zerotrust` は、AIエージェント（Muse など）にローカル環境への
+**監査可能で制約されたアクセス**を提供し、事後に「実際に何をしたのか」を
+証明できるようにする、オープンな共通基盤です。SSHに加えて、ローカルのCLI
+エージェント（Codex、DSH、OpenCode、Command Code、Mistral Vibe、
+Antigravity）に**作業を委譲**することもでき、リモートのエージェントに
+それらの認証情報を渡すことはありません。
 
-> **ステータス: 設計フェーズ / PoC。** まだ何もデプロイされていません。
-> 現在のマイルストーンは
-> [Milestone 1 — 監査可能なSSHアクセス](docs/issues/001-auditable-ssh-access.md)。
-> この先の方向性は [ロードマップ](docs/roadmap.md) を参照してください。
+> **ステータス: デプロイ済み・稼働中。** Phase 1（監査可能なSSHアクセス）と
+> Phase 2（自動レビュー、Telegram通知、MCP承認、LLMバックエンド）は完了、
+> Phase 3（特権ブローカー＋署名済みリース）はコア完了です。
+> 稼働記録は [deploy/README.md](deploy/README.md)、残項目は
+> [ロードマップ](docs/roadmap.md) を参照してください。
 
 ## なぜ必要か
 
@@ -135,8 +139,9 @@ flowchart TB
    依存は決してさせない。
 3. **改ざんに耐える証拠。** 監視対象はモニターを止められない、録画を
    編集できない、証拠ストアに届かない。
-4. **バイパスなし。** Warpgate が正面玄関なら、裏口は存在しない —
-   直接SSHの経路は「勧告」ではなく技術的に塞ぐ。
+4. **バイパスなし。** Warpgate と MCP Gateway が正面玄関なら、裏口は
+   存在しない — 直接SSHの経路は「勧告」ではなく技術的に塞ぐ
+   （sshdはLAN/ループバックのみ、tailnet上の22番はWarpgateそのもの）。
 5. **証拠そのものを守る。** セッション録画には秘密が入りうる。その機密性と
    保持は、後付けではなく設計要件である。
 
@@ -146,11 +151,11 @@ flowchart TB
 
 ## ロードマップ
 
-| フェーズ | 目標 | 主要技術 | 完了条件 |
+| フェーズ | 目標 | 主要技術 | 状態 |
 |---|---|---|---|
-| 1 | エージェントの実際の行動を完全に追跡する | Warpgate + Tetragon | [Milestone 1](docs/issues/001-auditable-ssh-access.md) のチェックリスト |
-| 2 | 独立したAIがその操作を評価する | Guardian AI + LLM | 実セッションのリスクスコア化、アラート |
-| 3 | 危険な操作を自動的に阻止する | ポリシーエンジン + IPS | エージェントユーザーの実行/egress のデフォルト拒否 |
+| 1 | エージェントの実際の行動を完全に追跡する | Warpgate + Tetragon | **完了** — [Milestone 1](docs/issues/001-auditable-ssh-access.md) |
+| 2 | 独立したAIがその操作を評価する | Guardian AI + LLM | **完了** — 自動レビュー、Telegram、MCP承認、Codex/DSHバックエンド |
+| 3 | 危険な操作を自動的に阻止する | ポリシーエンジン + IPS | **コア完了** — 特権ブローカー＋署名リース。egressデフォルト拒否は残項目 |
 
 詳細: [docs/roadmap.md](docs/roadmap.md)。
 
@@ -175,13 +180,21 @@ agent-zerotrust/
 ├── deploy/
 │   ├── warpgate/            要塞設定、ターゲット/ユーザーマッピング
 │   ├── tetragon/            トレーシングポリシー（実行 / ファイル / 通信）
-│   └── monitoring/          証拠パイプライン、保持
+│   ├── monitoring/          証拠パイプライン、セッションウォッチャー
+│   ├── approvals/           MCPゲートウェイのsystemdユニット
+│   └── broker/              特権ブローカーのユニット＋azt-worker CLI
 ├── guardian/               オプションの Guardian AI（証拠を消費、強制はしない）
+│   └── wrappers/            Codex / DSH のCLIラッパー
+├── evidence/                相関、ケース構築、ルールバックエンド、Telegram
+├── approvals/               MCPゲートウェイ：承認＋ワーカー委譲
+├── broker/                  特権ブローカー：リース、台帳、ポリシー
+├── workers/                 Worker Gateway：ローカルCLIエージェントへの委譲
 ├── policies/
-│   ├── network/             Tailscale ACL、egress ポリシー
+│   ├── network/             Tailscale ACL（適用済み）
 │   └── execution/           実行ポリシー（Phase 3）
 └── tests/
-    └── security/            脅威モデルを検証する攻撃シナリオスクリプト
+    ├── security/            脅威モデルを検証する攻撃シナリオスクリプト
+    └── *.py                 ユニットテスト（65/65）
 ```
 
 ## 関連プロジェクト

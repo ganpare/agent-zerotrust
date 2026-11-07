@@ -6,13 +6,17 @@
 
 Give AI agents real access to your machines — without trusting them.
 
-`agent-zerotrust` is an open foundation for providing AI agents (Muse, Claude
-Code, Codex, Hermes, ...) with **audited, constrained access to local
-environments** — and for proving, after the fact, exactly what they did.
+`agent-zerotrust` is an open foundation for providing AI agents (Muse and
+others) with **audited, constrained access to local environments** — and for
+proving, after the fact, exactly what they did. Beyond SSH, it can *delegate*
+work to local CLI agents (Codex, DSH, OpenCode, Command Code, Mistral Vibe,
+Antigravity) without ever handing the remote agent their credentials.
 
-> **Status: design phase / PoC.** Nothing is deployed yet. The active
-> milestone is [Milestone 1 — auditable SSH access](docs/issues/001-auditable-ssh-access.md).
-> See the [roadmap](docs/roadmap.md) for where this is going.
+> **Status: deployed and running.** Phase 1 (auditable SSH access) and
+> Phase 2 (auto-review, Telegram briefings, MCP approvals, LLM backends) are
+> complete; Phase 3 (privileged broker + signed permission leases) is core
+> complete. See [deploy/README.md](deploy/README.md) for the live deployment
+> record and [docs/roadmap.md](docs/roadmap.md) for what remains.
 
 ## Why
 
@@ -134,8 +138,10 @@ See [docs/architecture.md](docs/architecture.md) for the full detail.
    those who can run it, never a dependency for those who cannot.
 3. **Tamper-resistant evidence.** The monitored principal cannot turn off
    the monitors, edit recordings, or reach the evidence store.
-4. **No bypass.** If Warpgate is the front door, there must be no back
-   door — direct SSH paths are technically blocked, not just discouraged.
+4. **No bypass.** If Warpgate and the MCP Gateway are the front doors,
+   there must be no back door — direct SSH paths are technically blocked
+   (sshd is LAN/loopback only; the tailnet's port 22 *is* Warpgate), not just
+   discouraged.
 5. **Protect the evidence itself.** Session recordings can contain secrets;
    their confidentiality and retention are design requirements, not
    afterthoughts.
@@ -146,11 +152,11 @@ repository.
 
 ## Roadmap
 
-| Phase | Goal | Key tech | Exit criteria |
+| Phase | Goal | Key tech | Status |
 |---|---|---|---|
-| 1 | Fully track what agents actually do | Warpgate + Tetragon | [Milestone 1](docs/issues/001-auditable-ssh-access.md) checklist |
-| 2 | An independent AI evaluates the actions | Guardian AI + LLM | risk-scored real sessions, alerting |
-| 3 | Automatically block dangerous actions | policy engine + IPS | default-deny exec/egress for the agent user |
+| 1 | Fully track what agents actually do | Warpgate + Tetragon | **complete** — [Milestone 1](docs/issues/001-auditable-ssh-access.md) |
+| 2 | An independent AI evaluates the actions | Guardian AI + LLM | **complete** — auto-review, Telegram, MCP approvals, Codex/DSH backends |
+| 3 | Automatically block dangerous actions | policy engine + IPS | **core complete** — privileged broker + signed leases; egress default-deny remains |
 
 Details: [docs/roadmap.md](docs/roadmap.md).
 
@@ -175,13 +181,21 @@ agent-zerotrust/
 ├── deploy/
 │   ├── warpgate/            bastion config, target/user mapping
 │   ├── tetragon/            tracing policies (exec / file / network)
-│   └── monitoring/          evidence pipeline, retention
+│   ├── monitoring/          evidence pipeline, session watcher unit
+│   ├── approvals/           MCP gateway systemd unit
+│   └── broker/              privileged broker unit + azt-worker CLI
 ├── guardian/               optional Guardian AI (consumes evidence, never enforces)
+│   └── wrappers/            Codex / DSH CLI wrappers
+├── evidence/               correlation, case builder, rule backend, Telegram
+├── approvals/              MCP gateway: request_approval + worker dispatch
+├── broker/                 privileged broker: leases, ledger, policy
+├── workers/                Worker Gateway: local CLI agent dispatch
 ├── policies/
-│   ├── network/             Tailscale ACLs, egress policy
+│   ├── network/             Tailscale ACL (applied)
 │   └── execution/           execution policy (Phase 3)
 └── tests/
-    └── security/            attack-scenario scripts validating the threat model
+    ├── security/            attack-scenario scripts validating the threat model
+    └── *.py                 unit tests (65/65)
 ```
 
 ## Related work
