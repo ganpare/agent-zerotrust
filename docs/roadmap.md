@@ -34,6 +34,10 @@ Exit criteria: the acceptance checklist in
 - Input: the correlated evidence timeline (session → commands → kernel
   events) from Phase 1
 - Output: risk score, narrative explanation, anomaly flags, alerts (IDS)
+- Telegram adapter: IDS alerts with evidence context — and, later, the
+  approval channel ([architecture.md](architecture.md) §8)
+- MCP `request_approval`: advisory, agent-cooperative approval flow
+  ([architecture.md](architecture.md) §8)
 - Constraints:
   - **Optional** — the Phase 1 floor keeps working without it (SR5)
   - Pluggable LLM backend: local GPU or hosted API
@@ -46,7 +50,10 @@ Exit criteria: the acceptance checklist in
 - Default-deny execution and egress for the agent user
 - Tetragon enforcement actions as the blocking primitive (kill process,
   syscall override), with network policy as the second enforcement layer
-- Rollout: **detect-only first, then enforce** — never straight to blocking
+- Policy verdict **"ask"**: human-in-the-loop gating between allow and
+  deny — single-use, action-bound approval tokens over the Telegram
+  adapter; fail closed on timeout ([architecture.md](architecture.md) §8)
+- Rollout: **detect-only → ask → enforce** — never straight to blocking
 - Kill switch: revoke an agent's access without logging into the protected
   host
 

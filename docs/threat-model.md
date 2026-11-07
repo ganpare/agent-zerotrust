@@ -61,6 +61,8 @@ monitoring host root) — those are trusted by definition in this version.
 | T7 | Resource abuse (e.g. GPU cryptomining) | A4 | Exec evidence (1); execution policy (3) |
 | T8 | Persistence (cron, systemd units, shell rc files, `authorized_keys`) | A1, A6 | File/exec evidence (1); execution policy (3) |
 | T9 | Evidence leakage — recordings and logs contain secrets | A2, A5 | Evidence store ACLs, encryption at rest, retention limits (1) |
+| T10 | Approval-channel attack: spoofed or replayed approvals; agent requests approval for one action and performs another | A1, A2, A6 | Action-bound single-use short-TTL tokens; fail-closed timeout (3) |
+| T11 | Approval fatigue: the human rubber-stamps requests, turning "ask" into silent allow | A1, A2 | Guardian pre-screening keeps volume low; approval patterns are evidence; escalation limits (3) |
 
 ## 5. Trust boundaries
 
@@ -71,6 +73,9 @@ monitoring host root) — those are trusted by definition in this version.
   (4) userland ↔ kernel/eBPF   Tetragon observes from a ring the user cannot disable
   (5) protected host ↔         one-way evidence stream; the agent holds no
       monitoring host          credentials for the monitoring host
+  (6) gateway ↔ human          approval channel (Telegram adapter,
+      approver                 Phase 2–3): the approver's account
+                               authenticates step-up decisions (SR8)
 ```
 
 Boundary (4) is what makes the evidence *ground truth*: the monitored user
@@ -89,6 +94,8 @@ session.
 | SR5 | The security floor (SR1–SR3) keeps functioning with Guardian AI down | all |
 | SR6 | The agent user cannot reach LAN-internal services | T3 |
 | SR7 | The agent user cannot modify gateway, policy, or monitoring configuration | T6 |
+| SR8 | Approvals bind to the exact action (session + command/target), are single-use with a short TTL, and default to deny on timeout or channel loss | T10 |
+| SR9 | Every approval request and decision is an evidence record, and request volume stays low enough that approvals remain meaningful | T10, T11 |
 
 SR5 is the project's fail-safe property and is deliberate: deterministic
 access control is the floor; AI analysis is the enhancement. A user without
@@ -107,3 +114,7 @@ never widen the agent's privileges.
   never holds the only line of defense (SR5).
 - Session recording captures secrets typed by the agent; SR4 reduces but
   does not eliminate the retention risk.
+- The approval channel (Phase 2–3) makes the approver's messaging account
+  part of the security perimeter. Approvals stay scope-limited and
+  action-bound (SR8), so a compromised approver account is bad but is not
+  a root key; approval messages never carry secret values.

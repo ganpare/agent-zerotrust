@@ -52,6 +52,7 @@ no network path to it — boundary (5) in the threat model.
 | Evidence pipeline | evidence | Ships recordings + events off-host, one-way; append-only for the agent | SR3 |
 | Evidence store | evidence | Holds recordings and events; encrypted at rest; access logged; retention policy | SR4 |
 | Guardian AI | analysis | *Optional.* Consumes the correlated evidence timeline; produces risk scores, anomaly reports, narrative explanation | SR5 |
+| Approval service | response | *Phase 2–3.* Packages approval requests — from the agent (MCP `request_approval`) or from the policy engine's "ask" verdict — routes them to the human over a channel adapter (Telegram first), issues single-use, action-bound tokens | SR8, SR9 |
 | IDS / IPS | response | Phase 1–2: notify. Phase 3: block via Tetragon enforcement actions + network policy | — |
 
 ## 3. The core problem: correlation
@@ -113,7 +114,58 @@ The system degrades to its floor, never below it:
 
 - **Phase 1** — components 1–6 (no AI anywhere): auditable access.
 - **Phase 2** — add Guardian AI on the monitoring host, consuming the
-  correlated timeline; IDS alerting.
+  correlated timeline; IDS alerting over the Telegram adapter; advisory
+  MCP `request_approval` (§8).
 - **Phase 3** — policy engine + IPS: default-deny execution/egress for the
-  agent user; Tetragon enforcement actions as the blocking primitive;
+  agent user; Tetragon enforcement actions as the blocking primitive; the
+  "ask" verdict adds human-in-the-loop gating (§8) between allow and deny;
   detect-only rollout before enforcement.
+
+## 8. Human-in-the-loop approvals (design note)
+
+Status: **idea stage** — captured early because it shapes Phases 2–3.
+Open to better alternatives (open question at the end).
+
+Detection and blocking are the two ends of a ladder. Between them sits
+**asking the human**:
+
+```text
+ agent ──MCP──▶ request_approval(action, justification)
+                    │
+ approval service + Guardian AI package the context:
+   session · exact command/target · correlated evidence · risk note
+                    │
+        channel adapter (Telegram first)
+                    │   [Approve] [Deny]   ← inline buttons
+                    │
+ Approve ────────▶ single-use, short-TTL token,
+                   bound to the exact action + session
+ Deny / timeout ─▶ fail closed
+                    │
+ approval record ─▶ evidence store (approvals are evidence too)
+```
+
+Key properties:
+
+- **Approval binding.** The human approves *the gateway's view of the
+  action*, not the agent's description of it. A token unlocks exactly the
+  approved action in that session — nothing else. This is why *enforced*
+  approvals need Phase 1 correlation and Phase 3 enforcement; before
+  that, MCP approval is advisory (agent-cooperative) only.
+- **Fail closed.** No answer within the TTL means denied. Channel loss
+  means denied.
+- **Single-use, short-TTL tokens.** No replay. No blanket approvals —
+  unless explicitly scoped (e.g. "allow this destination for 1 h").
+- **No secrets in the channel.** The briefing carries actions and
+  context, never secret values — Telegram is third-party infrastructure.
+- **Telegram is an adapter, not the design.** The channel interface stays
+  generic; Telegram is the first implementation (push + inline buttons).
+- **Approvals are evidence.** Every request and decision is a record in
+  the evidence store.
+
+Rollout ladder: **detect-only → ask → enforce.**
+
+Open question: is MCP the right agent-side surface (vs. a CLI tool on the
+target, or the guardian agent requesting autonomously)? Current bet: MCP —
+it keeps agent integration standard, and lets the judging agent enrich the
+request with context before it reaches the human.

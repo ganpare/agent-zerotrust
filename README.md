@@ -1,5 +1,7 @@
 # agent-zerotrust
 
+**English** | [日本語](README.ja.md)
+
 **Zero Trust Security Gateway for AI Agents**
 
 Give AI agents real access to your machines — without trusting them.
@@ -101,11 +103,18 @@ repository.
 
 Details: [docs/roadmap.md](docs/roadmap.md).
 
+Between *detect* and *block* there is a middle rung: **human-in-the-loop
+approval**. A risky action can be gated on a single tap — the request,
+with its evidence context, reaches you over Telegram; the approval is
+bound to that exact action; silence means deny. Design note:
+[docs/architecture.md](docs/architecture.md) §8.
+
 ## Repository layout
 
 ```text
 agent-zerotrust/
 ├── README.md
+├── README.ja.md            Japanese README
 ├── LICENSE                  Apache-2.0
 ├── docs/
 │   ├── architecture.md      components, correlation, fail-safe behavior
