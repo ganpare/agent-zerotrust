@@ -63,6 +63,8 @@ monitoring host root) — those are trusted by definition in this version.
 | T9 | Evidence leakage — recordings and logs contain secrets | A2, A5 | Evidence store ACLs, encryption at rest, retention limits (1) |
 | T10 | Approval-channel attack: spoofed or replayed approvals; agent requests approval for one action and performs another | A1, A2, A6 | Action-bound single-use short-TTL tokens; fail-closed timeout (3) |
 | T11 | Approval fatigue: the human rubber-stamps requests, turning "ask" into silent allow | A1, A2 | Guardian pre-screening keeps volume low; approval patterns are evidence; escalation limits (3) |
+| T12 | Adversarial claims: injection or social engineering aimed at the Guardian or the human via claim/briefing text | A1, A2, A6 | Claims are untrusted data (four-record model); fixed-template briefing; gateway-minted buttons; "what will run" comes from the enforcement record (2–3) |
+| T13 | Broker compromise or grant/lease forgery — the redemption point is a new high-value target | A1, A2, A6 | Minimal hardened broker; offline-verifiable signed grants/leases; atomic local redemption ledger; funnel by DAC + Tetragon (3) |
 
 ## 5. Trust boundaries
 
@@ -94,8 +96,9 @@ session.
 | SR5 | The security floor (SR1–SR3) keeps functioning with Guardian AI down | all |
 | SR6 | The agent user cannot reach LAN-internal services | T3 |
 | SR7 | The agent user cannot modify gateway, policy, or monitoring configuration | T6 |
-| SR8 | Approvals bind to the exact action and the requesting agent identity, are single-use with a bounded grant TTL, and fail closed on expiry or channel loss | T10 |
+| SR8 | Approvals bind to the exact action and the requesting agent identity; grants are single-use with a bounded TTL, leases are per-use-verified with expiry and count limits — both fail closed on expiry, mismatch, or channel loss | T10, T13 |
 | SR9 | Every approval request and decision is an evidence record, and request volume stays low enough that approvals remain meaningful | T10, T11 |
+| SR10 | Deterministic policy sets the review tier; the Guardian may only raise scrutiny, never lower it; model output structurally cannot carry grants, tiers, or decisions | T10, T12 |
 
 SR5 is the project's fail-safe property and is deliberate: deterministic
 access control is the floor; AI analysis is the enhancement. A user without
@@ -121,3 +124,10 @@ never widen the agent's privileges.
   auto-approver widens the perimeter again: it must run outside the
   acting agent's reach and decide only within policy-defined risk classes
   (architecture §8.3), or it becomes a privilege-escalation path.
+- The Phase 3 broker is a new privileged component; its compromise
+  equals root on the protected host. Minimal code, offline-verifiable
+  signed grants/leases, and an atomic local ledger reduce but do not
+  eliminate this — accepted because the alternatives (broader sudo,
+  polkit sprawl) enlarge the privileged surface more than a small broker
+  does. The comparison lives in
+  [proposals/privileged-broker-and-lease.md](proposals/privileged-broker-and-lease.md).

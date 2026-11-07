@@ -51,8 +51,9 @@ no network path to it — boundary (5) in the threat model.
 | Tetragon | observation | eBPF-based ground truth — exec, file operations, network connections — from a ring the user cannot disable | SR2 |
 | Evidence pipeline | evidence | Ships recordings + events off-host, one-way; append-only for the agent | SR3 |
 | Evidence store | evidence | Holds recordings and events; encrypted at rest; access logged; retention policy | SR4 |
-| Guardian AI | analysis | *Optional.* Consumes the correlated evidence timeline; produces risk scores, anomaly reports, narrative explanation | SR5 |
-| Approval service | response | *Phase 2–3.* Packages approval requests — proactive (MCP `request_approval`) or denial-driven (the policy's "ask" verdict) — routes them to a pluggable decider over a channel adapter (Telegram first), issues single-use, action-bound tokens via the async protocol (§8) | SR8, SR9 |
+| Guardian AI | analysis | *Optional.* One-shot, advisory review of evidence vs. claim (§8.6); single swappable backend; may raise but never lower a review tier | SR5, SR10 |
+| Approval service | response | *Phase 2–3.* Packages approval requests — proactive (MCP `request_approval`) or denial-driven (the policy's "ask" verdict) — routes them to a pluggable decider over a channel adapter (Telegram first), issues single-use, action-bound tokens and permission leases (§8.2, §8.7) | SR8, SR9 |
+| Privileged broker | enforcement | *Phase 3, design stage.* The only privileged door on the protected host: mints denial IDs, verifies signed grants/leases, redeems atomically, executes the bound action, emits evidence (§8.8; sudo/polkit comparison pending) | SR8, SR10 |
 | IDS / IPS | response | Phase 1–2: notify. Phase 3: block via Tetragon enforcement actions + network policy | — |
 
 ## 3. The core problem: correlation
@@ -148,6 +149,13 @@ Detection and blocking are the two ends of a ladder. Between them sits
      agent can follow it. (a) remains a nicety for well-behaved agents.
 ```
 
+A structured denial can only be minted by a **controlled enforcement
+point** (Phase 3: the privileged broker for execution, the egress gate
+for network). Generic OS failures — a plain `EPERM`, a stock sudo
+refusal, or a Tetragon observation — carry no requestable denial ID;
+requests that reference them are marked **unverified** and can never
+route to an ALLOW-tier outcome.
+
 ### 8.2 Async approval protocol
 
 MCP tool calls are request/response (JSON-RPC over stdio or HTTP). A
@@ -195,8 +203,10 @@ identity, not to the session that asked.
   before that, MCP approval is advisory (agent-cooperative) only.
 - **Fail closed.** Deny, request-TTL expiry, channel loss — all mean
   denied.
-- **Single-use tokens.** No replay. No blanket approvals — unless
-  explicitly scoped (e.g. "allow this destination for 1 h").
+- **Single-use tokens and permission leases.** No replay; no blanket
+  approvals. A **lease** (§8.7) permits narrow, bounded repeat use for
+  legitimate repeated work — and every individual use is still verified
+  and recorded at redemption.
 - **No secrets in the channel.** The briefing carries actions and
   context, never secret values — Telegram is third-party infrastructure.
 - **Telegram is an adapter, not the design.** The channel interface stays
@@ -228,3 +238,76 @@ Rollout ladder: **detect-only → ask → enforce.**
 - Do non-MCP agents need a CLI fallback (`azt request-approval ...`)?
 - How does a granted-but-unredeemed token surface in the evidence store —
   request, grant, and redemption should be three distinct records.
+
+### 8.6 The four-record model (adopted)
+
+Every approval case keeps four records with distinct provenance,
+timestamps, and immutability expectations:
+
+1. **Evidence** — observed facts from the enforcement/recording side
+   (Warpgate metadata and recordings, Tetragon events, denial records).
+   Answers *what was observed*. Off-host; collection gaps are reported,
+   never interpreted as safety.
+2. **Claim** — the acting agent's untrusted explanation: purpose,
+   justification, expected effect, alternatives. Answers *what is
+   asserted*, never what is proven. Versioned: a clarification produces
+   a new claim version without altering the original.
+3. **Assessment** — the Guardian's advisory comparison of evidence and
+   claim: consistency, risks, alternatives, uncertainties — referencing
+   the exact evidence and claim versions used. Advisory only; never a
+   permission.
+4. **Decision** — the authoritative verdict of the human decider (or a
+   future strictly scoped auto-decider), plus grant/lease/redemption
+   history.
+
+Rules: append-only, nothing overwritten; claims are untrusted data and
+never instructions — to the Guardian or to the human briefing; the
+briefing renders the four records as distinct labeled fields, and the
+"what will actually run" line comes from the enforcement record, not the
+claim. A prototype of the review function (one-shot, single swappable
+backend, advisory-only) is implemented in `guardian/` (draft PR #2) and
+verified by adversarial tests: hostile model output, provider failure,
+and malicious claims cannot alter tiers, force grants, or block human
+review.
+
+### 8.7 Permission leases
+
+Per-operation approval does not scale to legitimate repeated work;
+blanket grants are unsafe. The middle instrument is the **lease**:
+
+```text
+ lease = agent principal + operation class + narrow scope
+       + expiry (+ optional max uses)
+```
+
+- Example: "restart the `training-web` service, up to 10 times, within
+  2 hours."
+- A lease redeems like a token, but repeatedly: **every individual use
+  is verified by the broker** (binding recheck, §8.2) and recorded as
+  its own evidence event. Request ID → Lease ID → operation events are
+  separately traceable — for approval auditing and later incident
+  investigation.
+- Expiry, use-count exhaustion, revocation, or any binding mismatch ends
+  the lease's validity; a changed target or operation requires a new
+  approval, never a reuse.
+- Leases never widen: anything outside the leased operation class keeps
+  its deterministic tier.
+
+### 8.8 Enforcement point and the privileged broker (design stage)
+
+Phase 3's "ask" verdict needs a controlled enforcement/redemption point
+on the protected host — generic `EPERM` can neither mint denial IDs nor
+redeem grants. Leading design (pending the sudo/polkit comparison, see
+[proposals/privileged-broker-and-lease.md](proposals/privileged-broker-and-lease.md)):
+
+- The agent user has **no sudo**; the broker is the only privileged door
+  for approvable classes (the funnel is enforced by DAC plus Tetragon
+  static denies).
+- The broker mints **denial IDs** with the exact action spec; verifies
+  **signed grants/leases** offline (pinned public key); redeems
+  **atomically** (local append-only ledger, unique-ID constraint under a
+  lock — a concurrent double-redeem fails exactly one); executes exactly
+  the bound action; and emits redemption + post-exec evidence.
+- **Rollout:** land the broker in observe/deny-only mode (no
+  redemption), then enable grants and leases — the same
+  detect-before-enforce discipline as everything else.

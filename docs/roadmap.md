@@ -38,6 +38,12 @@ Exit criteria: the acceptance checklist in
   approval channel ([architecture.md](architecture.md) §8)
 - MCP `request_approval`: advisory, agent-cooperative approval flow
   ([architecture.md](architecture.md) §8)
+- Four-record briefing (Evidence / Claim / Assessment / Decision) as
+  distinct, provenance-labeled records
+  ([architecture.md](architecture.md) §8.6); the review function
+  prototype — one-shot, single swappable backend, advisory-only — is
+  implemented in `guardian/` (draft PR #2) and verified by adversarial
+  tests (hostile model output, provider failure, malicious claims)
 - Constraints:
   - **Optional** — the Phase 1 floor keeps working without it (SR5)
   - Pluggable LLM backend: local GPU or hosted API
@@ -51,12 +57,22 @@ Exit criteria: the acceptance checklist in
 - Tetragon enforcement actions as the blocking primitive (kill process,
   syscall override), with network policy as the second enforcement layer
 - Policy verdict **"ask"**: human-in-the-loop gating between allow and
-  deny — single-use, action-bound approval tokens over the Telegram
-  adapter; fail closed on timeout ([architecture.md](architecture.md) §8)
+  deny — single-use, action-bound approval tokens and permission leases
+  over the Telegram adapter; fail closed on timeout
+  ([architecture.md](architecture.md) §8.7)
 - Denial-driven requests: a policy denial carries a machine-readable
   reason pointing at `request_approval` — any error-handling agent can
   follow it, no special integration needed
   ([architecture.md](architecture.md) §8.1)
+- Privileged broker as the enforcement/redemption keystone: denial IDs,
+  signed grants/leases, atomic redemption — **design comparison
+  (sudo / polkit / broker) before any implementation**
+  ([proposals/privileged-broker-and-lease.md](proposals/privileged-broker-and-lease.md),
+  [architecture.md](architecture.md) §8.8); land in observe/deny-only
+  mode first
+- Acceptance harness: the twelve attack-oriented validation scenarios
+  from the evidence–intent proposal (draft PR #1), mapped to threat IDs
+  in `tests/security/`
 - Rollout: **detect-only → ask → enforce** — never straight to blocking
 - Kill switch: revoke an agent's access without logging into the protected
   host

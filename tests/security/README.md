@@ -12,3 +12,9 @@ scenario maps to a threat ID in
 
 Runs against the Phase 1 deployment; used as the acceptance harness for
 [docs/issues/001-auditable-ssh-access.md](../../docs/issues/001-auditable-ssh-access.md).
+
+Phase 3 adds the twelve attack-oriented validation scenarios from the
+evidence–intent proposal (draft PR #1) — claim/evidence agreement, false
+claims, unverified denials, prompt injection, identity spoofing, TOCTOU,
+replay/race, outage, approval fatigue, privileged-retry, and operator
+training — each mapped to a threat ID above.
