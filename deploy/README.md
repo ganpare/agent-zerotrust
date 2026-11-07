@@ -58,22 +58,38 @@ monitoring host.
   explicit `args` type declarations (`file`, `int`); a wrong `matchArgs`
   index aborts the daemon at startup
 
-## Remaining for Milestone 1 (user actions)
+## Milestone 1 — COMPLETE (2026-11-07)
+
+All acceptance criteria in
+[docs/issues/001-auditable-ssh-access.md](../docs/issues/001-auditable-ssh-access.md)
+are met and validated. The evidence pipeline is live end-to-end:
+
+- **Evidence pull runs on <MONITORING_HOST>** every 15 minutes (Task Scheduler:
+  `agent-zerotrust-evidence-pull` → `pull-evidence.ps1`), pulling the
+  warpgate SQLite DB + session recording casts fresh each run and rotated
+  tetragon exports incrementally by filename. Verified landing: DB files,
+  42 cast files, rotated event exports (size-exact).
+- Tetragon export rotates every **15 min** (`--export-file-rotation-interval`)
+  so rotated files close quickly and ship as complete, immutable evidence.
+- Warpgate deliberately creates recording dirs/files 0700/0600; the
+  `agent-zerotrust-evidence-acl` systemd timer (root, every minute) re-arms
+  `g:evidence:rX` ACLs on the recordings tree so the collector can read
+  them. `ai-muse` remains blocked by the `state/` dir (0750 sungo:evidence).
+
+## Post-milestone follow-ups (not blocking)
 
 - [ ] **Tailscale ACL** (admin console): apply
       [policies/network/tailscale-acl.draft.hujson](../policies/network/tailscale-acl.draft.hujson)
-      — device tags, agent → `:2222` only; the host-side nftables block
-      is already active and **fully validated** (below), the ACL adds
-      the tailnet-level layer
+      — tailnet-level defense-in-depth on top of the validated host-side
+      block
 - [ ] Muse's host joins the tailnet (`tag:agent-muse`) and receives
       `deploy/warpgate/state/muse-client-key` (transfer securely)
-- [ ] Evidence pull on <MONITORING_HOST>: transfer
-      `deploy/warpgate/state/evidence-collector-key` to <MONITORING_HOST>, then
-      schedule [deploy/monitoring/pull-evidence.ps1](monitoring/pull-evidence.ps1)
-      (the exact scp commands were verified from the collector identity;
-      the pull now includes the recordings casts)
-- [ ] Eyeball a session recording replay in the warpgate admin UI
-      (`https://<PROTECTED_HOST_IP>:8888/@warpgate/admin` → Recordings)
+- [ ] sshd hardening: `PasswordAuthentication yes` is still global
+      (LAN-only exposure now); disable after confirming nobody needs it
+- [ ] Swap the scheduled task to run whether the user is logged on or not
+      (`schtasks /RU conta /RP`), or move the pull into a Windows service
+- [ ] Stage 2: <MONITORING_HOST> as a second protected host (Warpgate target +
+      Sysmon observation) and the evidence store moves to the Synology
 
 ## Host-side controls already in place (verified)
 

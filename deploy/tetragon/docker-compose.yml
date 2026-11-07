@@ -12,8 +12,11 @@ services:
     command:
       - --export-filename=/var/log/tetragon-events/tetragon.json
       - --export-file-max-size-mb=100
-      - --export-file-max-backups=5
+      - --export-file-max-backups=500
       - --export-file-perm=644
+      # Time-based rotation: every 15 minutes a complete, immutable file
+      # closes — the evidence pull ships exactly these, incrementally.
+      - --export-file-rotation-interval=15m
     volumes:
       - /sys/kernel/btf/vmlinux:/var/lib/tetragon/btf:ro
       - ./policies:/etc/tetragon/tetragon.tp.d:ro

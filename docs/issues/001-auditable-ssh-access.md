@@ -10,17 +10,35 @@ everything it does is provable afterwards — without trusting the agent.
 
 ## Acceptance criteria
 
-- [ ] The agent can SSH **only** via Warpgate; a direct `sshd` connection
+- [x] The agent can SSH **only** via Warpgate; a direct `sshd` connection
       under the agent's identity is refused (Tailscale ACL / listen config)
-- [ ] The full session is recorded in Warpgate and replayable
-- [ ] Every command executed in the session has a matching Tetragon `exec`
+      — *validated end-to-end from a real second tailnet device
+      (<TEST_DEVICE>): `:22` timed out (dropped), `:2222` reached
+      warpgate; host-side iptables rule + `agent-zerotrust-firewall.service`;
+      the tailnet ACL remains recommended defense-in-depth*
+- [x] The full session is recorded in Warpgate and replayable
+      — *`recordings_enable` on (it is a global parameter, not a setup
+      flag); Terminal casts verified via the admin API and on disk*
+- [x] Every command executed in the session has a matching Tetragon `exec`
       event, correlated to that session (process tree / cgroup)
-- [ ] File opens and network connections by session processes are captured
-      as Tetragon events
-- [ ] Evidence (recordings + events) is stored off-host and is not writable
-      or deletable by the agent user
-- [ ] Access can be revoked without logging into the protected host
-      (kill switch)
+      — *proven: `sshd → bash -c … → cat/curl` with full parent-PID
+      ancestry (`tests/security/run-phase1.sh`)*
+- [x] File opens and network connections by session processes are captured
+      as Tetragon events — *canary secret read and outbound connect both
+      captured by the UID-scoped policies*
+- [x] Evidence (recordings + events) is stored off-host and is not writable
+      or deletable by the agent user — *pull runs on the monitoring host
+      (<MONITORING_HOST>) every 15 min via a read-only SFTP collector; warpgate DB +
+      recording casts + rotated tetragon exports verified landing; agent
+      cannot read or delete any of it (T6)*
+- [x] Access can be revoked without logging into the protected host
+      (kill switch) — *role revocation via the off-host admin API denies
+      access immediately; restore re-enables it*
+
+**Completed 2026-11-07.** Full deployment record and verification log:
+[deploy/README.md](../deploy/README.md). Follow-ups (not blocking):
+tailnet ACL application, Muse host onboarding, sshd password-auth
+hardening.
 
 ## Tasks
 
