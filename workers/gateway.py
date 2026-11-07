@@ -156,9 +156,9 @@ def wrap_prompt(instruction: str, target: str, workdir: str) -> str:
     )
     if target == "windows":
         win_header = (
-            "TARGET ENVIRONMENT: Windows host (user `conta` with GPU & project ownership).\n"
-            "- Execute commands on Windows via: `ssh windows \"<command>\"` (uses `~/.ssh/config` Host `windows`).\n"
-            "- Windows drives are also mounted locally under `/mnt/Win-C-home`, `/mnt/Win-D`, `/mnt/Win-E`, etc.\n"
+            "TARGET ENVIRONMENT: Windows host (<MONITORING_HOST>) with GPU access.\n"
+            "- ALWAYS execute commands on Windows via: `ssh windows \"<command>\"` (uses SSH for all file/OS interaction).\n"
+            "- NEVER access Windows files directly via mounts.\n"
             "- Report clearly what commands you ran on Windows and their output.\n\n"
         )
         return guard_header + win_header + "Task:\n" + instruction
