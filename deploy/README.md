@@ -102,10 +102,10 @@ Human paths through warpgate (recorded, full rights):
 
 ## Post-milestone follow-ups (not blocking)
 
-- [ ] **Tailscale ACL** (admin console): apply
-      [policies/network/tailscale-acl.draft.hujson](../policies/network/tailscale-acl.draft.hujson)
-      — tailnet-level defense-in-depth on top of the validated host-side
-      block
+- [x] **Tailscale ACL — APPLIED and verified** (2026-11-07):
+      [policies/network/tailscale-acl.applied.hujson](../policies/network/tailscale-acl.applied.hujson)
+      — the tagged agent (tag:agent-muse) reaches only <PROTECTED_HOST>:22/8930;
+      empirically verified (443 reachable before tagging, blocked after)
 - [ ] Muse's host joins the tailnet (`tag:agent-muse`) and receives
       `deploy/warpgate/state/muse-client-key` (transfer securely)
 - [ ] sshd hardening: `PasswordAuthentication yes` is still global

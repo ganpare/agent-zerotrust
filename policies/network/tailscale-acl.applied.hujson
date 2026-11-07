@@ -1,0 +1,47 @@
+// APPLIED 2026-11-07 — this is the tailnet policy actually running on
+// this tailnet (verified: the tagged agent reaches 22/8930 and is blocked
+// everywhere else; personal devices keep full access).
+//
+// History: Muse's host joined the tailnet under Tailnet Lock (signed after
+// explicit human action), was tagged tag:agent-muse via the console, and
+// this grants-format policy restricts it to the two agent endpoints:
+//   - <PROTECTED_HOST>:22   = Warpgate (the only SSH door on the tailnet)
+//   - <PROTECTED_HOST>:8930 = the MCP approvals server
+{
+	"hosts": {
+		"<PROTECTED_HOST>": "<PROTECTED_HOST_IP>",
+	},
+
+	"tagOwners": {
+		"tag:agent-muse": ["<OWNER_EMAIL>"],
+	},
+
+	"grants": [
+		{
+			"src": ["tag:agent-muse"],
+			"dst": ["<PROTECTED_HOST>"],
+			"ip":  ["22", "8930"],
+		},
+		{
+			"src": ["autogroup:member"],
+			"dst": ["*"],
+			"ip":  ["*"],
+		},
+	],
+
+	"ssh": [
+		{
+			"action": "check",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:self"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+	],
+
+	"nodeAttrs": [
+		{
+			"target": ["autogroup:member"],
+			"attr": ["funnel"],
+		},
+	],
+}
