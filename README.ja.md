@@ -43,7 +43,7 @@ Meta の
 ```mermaid
 flowchart TB
     subgraph agents["AIエージェント"]
-        muse["Muse<br/><i>リモート・SSH経由</i>"]
+        muse["Muse<br/><i>リモート · SSH + MCP</i>"]
         local["Claude Code / Codex<br/><i>将来: ローカルエージェント</i>"]
     end
 
@@ -55,21 +55,26 @@ flowchart TB
         wg["エージェントごとの認証<br/>セッション録画・再生"]
     end
 
-    subgraph protected["保護ホスト · Linux"]
+    subgraph protected["保護ホスト · Linux (<PROTECTED_HOST>)"]
         user["<code>ai-muse</code><br/>非特権 · sudoなし"]
         tg["<b>Tetragon (eBPF)</b><br/>カーネルレベルの事実<br/>実行 · ファイル · 通信"]
         broker["<b>特権ブローカー</b><br/>唯一の特権ドア<br/>署名済みリースを検証"]
     end
 
-    subgraph gateway["ゲートウェイサービス"]
-        approvals["承認サービス<br/>MCP + Telegram<br/>署名済みリースを鋳造"]
+    subgraph gateway["ゲートウェイサービス (<PROTECTED_HOST>)"]
+        mcp["<b>MCP Gateway (:8930)</b><br/>承認 + ワーカー委譲"]
         watcher["セッションウォッチャー<br/>自動レビュー + 通知"]
+        workers["<b>Worker Gateway</b><br/>codex · dsh · opencode<br/>commandcode · vibe · agy"]
+    end
+
+    subgraph windows["Windowsホスト (GPU)"]
+        win["RTX 4090 · <code>conta</code>環境<br/><i>ssh windows 経由</i>"]
     end
 
     subgraph monitoring["監視ホスト"]
         store[("証拠ストア<br/>録画 + イベント")]
         guardian["Guardian AI <i>(オプション)</i><br/>証拠 vs 申告<br/>リスク評価"]
-        ids["IDS · 通知<br/>IPS · 遮断"]
+        ids["IDS · 通知"]
     end
 
     human(["人間（オーナー）<br/>Telegram · 管理UI"])
@@ -77,20 +82,22 @@ flowchart TB
     muse -->|"ssh"| acl
     local -.->|"将来"| acl
     acl -->|"22番のみ"| wg
+    acl -->|"8930番のみ"| mcp
     wg -->|"ai-muse として"| user
     user -->|"全システムコール"| tg
     user -->|"azt-broker"| broker
+    user -->|"azt-worker / MCP"| mcp
+    mcp -->|"dispatch_task"| workers
+    workers -->|"ssh windows"| win
     tg -->|"一方向の証拠"| store
     broker -->|"リース償還"| store
     store --> guardian
     guardian --> ids
     watcher --> guardian
     watcher -->|"ブリーフィング"| human
-    approvals -->|"承認リクエスト"| human
-    human -->|"✅ / 🚫"| approvals
-    approvals -->|"署名済みリース"| broker
-    user -.->|"request_approval"| approvals
-    wg -.->|"録画"| store
+    mcp -->|"承認リクエスト"| human
+    human -->|"✅ / 🚫"| mcp
+    mcp -->|"署名済みリース"| broker
 
     classDef agent fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
     classDef bastionBox fill:#fff3e0,stroke:#f57c00,stroke-width:2px
@@ -98,18 +105,24 @@ flowchart TB
     classDef controlBox fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef monBox fill:#eceff1,stroke:#546e7a,stroke-width:2px
     classDef humanBox fill:#fffde7,stroke:#fbc02d,stroke-width:2px
+    classDef winBox fill:#e0f7fa,stroke:#00838f,stroke-width:2px
 
     class muse,local agent
     class acl,wg bastionBox
     class user,tg,broker hostBox
-    class approvals,watcher controlBox
+    class mcp,watcher,workers controlBox
     class store,guardian,ids monBox
     class human humanBox
+    class win winBox
 ```
 
-**核心となる問題は相関（correlation）**： ターミナルに見えるものと、カーネルが実際にしたことは別物です。録画されたPTY上のたった一行の `python train.py` は、裏で百個のファイルを開き、インターネットへ通信しうる。Warpgate は*エージェントが打ったもの*を、Tetragon は*実際に起きたこと*を教えてくれます。この2つを紐付けて初めて、セッションは監査可能になります。
+**核心となる問題は相関（correlation）**： Warpgate は*エージェントが打ったもの*を、Tetragon は*実際に起きたこと*を教えてくれます。この2つを紐付けて初めて、セッションは監査可能になります。
 
-**承認ループ**は逆方向を閉じます： 拒否された特権操作は機械可読な拒否IDを伴い → エージェントがMCPで承認を要求し → 人間がTelegramでタップし → 署名済みの期限付きリースが鋳造され → ブローカーが検証・償還して、束縛された操作だけを実行します。
+**承認ループ**： 拒否された特権操作は機械可読な拒否IDを伴い → エージェントがMCPで承認を要求し → 人間がTelegramでタップし → 署名済みの期限付きリースが鋳造され → ブローカーが検証・償還して、束縛された操作だけを実行します。
+
+**Worker Gateway**： エージェントに認証情報を渡すことなく、到達範囲を広げます。エージェントは MCP Gateway に「タスクを委譲」を依頼し、ローカルのCLIエージェント（codex, dsh, opencode, commandcode, vibe, agy）がオーナーの環境で実行します。Windows 側の作業は `ssh windows` 経由のみ（マウントや追加ユーザーは使いません）。すべての委譲は安全チェック・監査・Telegram通知の対象です。
+
+**現在のIDS/IPSの立ち位置**： IDSは稼働中（セッション自動レビュー + Telegram通知）。IPSは「OS境界での許可ベース」で実効（`ai-muse` にsudoなし、特権操作はブローカー経由、通信は観測のみでデフォルト拒否は未実装）。egressのデフォルト拒否とTetragonによる強制は Phase 3 の残項目です。
 
 詳細は [docs/architecture.md](docs/architecture.md) を参照してください。
 

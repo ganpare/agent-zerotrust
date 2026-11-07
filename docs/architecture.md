@@ -5,7 +5,7 @@ component below exists to satisfy a security requirement (SR) there.
 
 ## 1. Overview
 
-Two hosts, five planes:
+Two hosts, six planes:
 
 ```text
                           ┌──────────────────────┐
@@ -15,31 +15,64 @@ Two hosts, five planes:
                                      │
                         path plane: Tailscale (SR1, T5)
                                      │
-                          ┌──────────┴───────────┐
-                          │       Warpgate       │  access plane
-                          │ SSH bastion, per-    │  (SR1)
-                          │ agent auth, session  │
-                          │ recording & replay   │
-                          └──────────┬───────────┘
-                                     │
-   ┌───────────────── protected host ┴──────────────────┐
-   │  isolation plane: unprivileged agent user (ai-muse) │
-   │                                                     │
-   │  observation plane: Tetragon (eBPF)                 │
-   │  exec · file · network ground truth (SR2)           │
-   └──────────────────────┬──────────────────────────────┘
+                  ┌──────────────────┴──────────────────┐
+                  │                                     │
+        ┌─────────┴─────────┐                 ┌─────────┴─────────┐
+        │      Warpgate     │  access plane   │   MCP Gateway     │  control plane
+        │  SSH bastion      │  (SR1)          │   :8930           │  (SR8, SR9)
+        │  recording        │                 │   approval +      │
+        └─────────┬─────────┘                 │   worker dispatch │
+                  │                           └─────────┬─────────┘
+                  │                                     │
+   ┌──────────────┴──── protected host ────────────────┴──────────────┐
+   │  isolation plane: unprivileged agent user (ai-muse)               │
+   │                                                                   │
+   │  observation plane: Tetragon (eBPF)                               │
+   │  exec · file · network ground truth (SR2)                         │
+   │                                                                   │
+   │  enforcement plane: privileged broker (signed leases)             │
+   │  + Worker Gateway: codex / dsh / opencode / commandcode /         │
+   │    vibe / agy → `ssh windows` for GPU work on the Windows host    │
+   └──────────────────────┬────────────────────────────────────────────┘
                           │  one-way evidence stream (SR3)
-   ┌──────────────────────┴──── monitoring host ─────────┐
-   │  evidence plane:                                    │
-   │  · evidence store (recordings + events) (SR3, SR4)  │
-   │  · Guardian AI (optional) (SR5)                     │
-   │  · IDS: notify now · IPS: block in Phase 3          │
-   └─────────────────────────────────────────────────────┘
+   ┌──────────────────────┴──── monitoring host ────────────────────────┐
+   │  evidence plane:                                                    │
+   │  · evidence store (recordings + events) (SR3, SR4)                  │
+   │  · Guardian AI (optional) (SR5)                                     │
+   │  · IDS: notify now (Telegram) · IPS: OS-boundary allow (Phase 3)    │
+   └─────────────────────────────────────────────────────────────────────┘
 ```
 
 The protected host is where the agent works. The monitoring host is where
 the proof lives. The agent holds no credentials for the monitoring host and
 no network path to it — boundary (5) in the threat model.
+
+### 1.1 The worker gateway (agent delegation)
+
+The agent does not get extra credentials to reach other machines. Instead:
+
+- **Muse → MCP Gateway (:8930)**: `dispatch_worker_task(agent, instruction,
+  target, workdir)` asks a **local CLI agent** (codex, dsh, opencode,
+  commandcode, vibe, agy) to do the work.
+- **Worker → Windows**: the worker is instructed to operate on the Windows
+  host **only through `ssh windows`** (owner's environment, RTX 4090).
+  Mounts and additional Windows users are deliberately not used.
+- **Every dispatch is**: safety-screened (credential reads, service stops,
+  root wipes are blocked), audited (append-only log on the 22 TB evidence
+  drive), and briefed to Telegram (start + completion).
+- **SSH-only access**: the agent can also call the same gateway from inside
+  its SSH session via `azt-worker`, so no MCP client is required.
+
+### 1.2 Current IDS / IPS posture
+
+| Control | Status |
+|---|---|
+| IDS: session review + Telegram briefing | **live** |
+| IDS: privilege denial events + approval requests | **live** |
+| IPS: `ai-muse` has no sudo (OS boundary) | **live** |
+| IPS: privileged ops only via broker + signed lease | **live** |
+| IPS: network egress default-deny | **not yet** (observed only) |
+| IPS: Tetragon process kill / syscall block | **not yet** (Phase 3 follow-up) |
 
 ## 2. Components
 

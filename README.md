@@ -42,7 +42,7 @@ The premise is zero trust:
 ```mermaid
 flowchart TB
     subgraph agents["AI Agents"]
-        muse["Muse<br/><i>remote, over SSH</i>"]
+        muse["Muse<br/><i>remote · SSH + MCP</i>"]
         local["Claude Code / Codex<br/><i>future: local agents</i>"]
     end
 
@@ -54,21 +54,26 @@ flowchart TB
         wg["per-agent identity & auth<br/>full session recording & replay"]
     end
 
-    subgraph protected["Protected host · Linux"]
+    subgraph protected["Protected host · Linux (<PROTECTED_HOST>)"]
         user["<code>ai-muse</code><br/>unprivileged · no sudo"]
         tg["<b>Tetragon (eBPF)</b><br/>kernel-level ground truth<br/>exec · file · network"]
         broker["<b>Privileged broker</b><br/>the only privileged door<br/>verifies signed leases"]
     end
 
-    subgraph gateway["Gateway services"]
-        approvals["Approval service<br/>MCP + Telegram<br/>mints signed leases"]
+    subgraph gateway["Gateway services (<PROTECTED_HOST>)"]
+        mcp["<b>MCP Gateway (:8930)</b><br/>approval + worker dispatch"]
         watcher["Session watcher<br/>auto-review + briefing"]
+        workers["<b>Worker Gateway</b><br/>codex · dsh · opencode<br/>commandcode · vibe · agy"]
+    end
+
+    subgraph windows["Windows host (GPU)"]
+        win["RTX 4090 · <code>conta</code> env<br/><i>reached via ssh windows</i>"]
     end
 
     subgraph monitoring["Monitoring host"]
         store[("Evidence store<br/>recordings + events")]
         guardian["Guardian AI <i>(optional)</i><br/>evidence vs claim<br/>risk scoring"]
-        ids["IDS · notify<br/>IPS · block"]
+        ids["IDS · notify"]
     end
 
     human(["Human owner<br/>Telegram · admin UI"])
@@ -76,20 +81,22 @@ flowchart TB
     muse -->|"ssh"| acl
     local -.->|"future"| acl
     acl -->|"only :22"| wg
+    acl -->|"only :8930"| mcp
     wg -->|"as ai-muse"| user
     user -->|"every syscall"| tg
     user -->|"azt-broker"| broker
+    user -->|"azt-worker / MCP"| mcp
+    mcp -->|"dispatch_task"| workers
+    workers -->|"ssh windows"| win
     tg -->|"one-way evidence"| store
     broker -->|"lease redemption"| store
     store --> guardian
     guardian --> ids
     watcher --> guardian
     watcher -->|"briefing"| human
-    approvals -->|"approval request"| human
-    human -->|"✅ / 🚫"| approvals
-    approvals -->|"signed lease"| broker
-    user -.->|"request_approval"| approvals
-    wg -.->|"recordings"| store
+    mcp -->|"approval request"| human
+    human -->|"✅ / 🚫"| mcp
+    mcp -->|"signed lease"| broker
 
     classDef agent fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
     classDef bastionBox fill:#fff3e0,stroke:#f57c00,stroke-width:2px
@@ -97,26 +104,24 @@ flowchart TB
     classDef controlBox fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
     classDef monBox fill:#eceff1,stroke:#546e7a,stroke-width:2px
     classDef humanBox fill:#fffde7,stroke:#fbc02d,stroke-width:2px
+    classDef winBox fill:#e0f7fa,stroke:#00838f,stroke-width:2px
 
     class muse,local agent
     class acl,wg bastionBox
     class user,tg,broker hostBox
-    class approvals,watcher controlBox
+    class mcp,watcher,workers controlBox
     class store,guardian,ids monBox
     class human humanBox
+    class win winBox
 ```
 
-**The key problem is correlation**: what the terminal shows is not what
-the kernel did. A single `python train.py` on the PTY can open a hundred
-files and call out to the internet. Warpgate tells you *what the agent
-typed*; Tetragon tells you *what actually happened*; correlating the two
-makes the session auditable.
+**The key problem is correlation**: what the terminal shows is not what the kernel did. Warpgate tells you *what the agent typed*; Tetragon tells you *what actually happened*; correlating the two makes the session auditable.
 
-**The approval loop** closes the other direction: a denied privileged
-operation carries a machine-readable denial ID → the agent requests
-approval via MCP → the human taps on Telegram → a signed, bounded lease
-is minted → the broker verifies and redeems it, executing exactly the
-bound action.
+**The approval loop** closes the other direction: a denied privileged operation carries a machine-readable denial ID → the agent requests approval via MCP → the human taps on Telegram → a signed, bounded lease is minted → the broker verifies and redeems it, executing exactly the bound action.
+
+**The worker gateway** extends the agent's reach without giving it credentials: the agent asks the MCP Gateway to *dispatch a task* to a local CLI agent (codex, dsh, opencode, commandcode, vibe, agy). The worker runs under the owner's environment, and Windows work is reached through `ssh windows` — never through mounts or extra Windows users. Every dispatch is safety-screened, audited, and briefed to Telegram.
+
+**Current IDS/IPS posture**: IDS is live (session review + Telegram briefings). IPS is enforced as *allow-by-default at the OS boundary* (no sudo for `ai-muse`, broker-mediated privileged ops, network observed but not default-denied). Default-deny egress and Tetragon enforcement remain Phase 3 follow-ups.
 
 See [docs/architecture.md](docs/architecture.md) for the full detail.
 
