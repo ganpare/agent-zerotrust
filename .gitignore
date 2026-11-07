@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Secrets & credentials — this project is about guarding them;
+# never commit real keys, tokens, or captured evidence.
+*.pem
+*.key
+.env
+.env.*
+
+# Captured evidence / recordings (may contain secrets)
+recordings/
+evidence/
+
+# Local deployment state
+deploy/*/local/
