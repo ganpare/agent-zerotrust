@@ -14,9 +14,10 @@ Thumbs.db
 .env
 .env.*
 
-# Captured evidence / recordings (may contain secrets)
-recordings/
-evidence/
+# Captured evidence / recordings (may contain secrets) — the real data
+# lives under deploy/*/state/ (ignored below); these anchors only guard
+# against stray top-level dumps with those exact names.
+/recordings/
 
 # Local deployment state
 deploy/*/local/
