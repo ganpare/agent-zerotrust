@@ -54,13 +54,13 @@ flowchart TB
         wg["per-agent identity & auth<br/>full session recording & replay"]
     end
 
-    subgraph protected["Protected host · Linux (<PROTECTED_HOST>)"]
+    subgraph protected["Protected host · Linux"]
         user["<code>ai-muse</code><br/>unprivileged · no sudo"]
         tg["<b>Tetragon (eBPF)</b><br/>kernel-level ground truth<br/>exec · file · network"]
         broker["<b>Privileged broker</b><br/>the only privileged door<br/>verifies signed leases"]
     end
 
-    subgraph gateway["Gateway services (<PROTECTED_HOST>)"]
+    subgraph gateway["Gateway services"]
         mcp["<b>MCP Gateway (:8930)</b><br/>approval + worker dispatch"]
         watcher["Session watcher<br/>auto-review + briefing"]
         workers["<b>Worker Gateway</b><br/>codex · dsh · opencode<br/>commandcode · vibe · agy"]

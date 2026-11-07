@@ -55,13 +55,13 @@ flowchart TB
         wg["エージェントごとの認証<br/>セッション録画・再生"]
     end
 
-    subgraph protected["保護ホスト · Linux (<PROTECTED_HOST>)"]
+    subgraph protected["保護ホスト · Linux"]
         user["<code>ai-muse</code><br/>非特権 · sudoなし"]
         tg["<b>Tetragon (eBPF)</b><br/>カーネルレベルの事実<br/>実行 · ファイル · 通信"]
         broker["<b>特権ブローカー</b><br/>唯一の特権ドア<br/>署名済みリースを検証"]
     end
 
-    subgraph gateway["ゲートウェイサービス (<PROTECTED_HOST>)"]
+    subgraph gateway["ゲートウェイサービス"]
         mcp["<b>MCP Gateway (:8930)</b><br/>承認 + ワーカー委譲"]
         watcher["セッションウォッチャー<br/>自動レビュー + 通知"]
         workers["<b>Worker Gateway</b><br/>codex · dsh · opencode<br/>commandcode · vibe · agy"]
