@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -36,7 +37,7 @@ from .tetragon import load_events
 from .warpgate import WarpgateClient
 
 REPO = Path(__file__).resolve().parents[1]
-STATE_PATH = REPO / "deploy/monitoring/state/watch-state.json"
+STATE_PATH = Path("/mnt/hdd22/agent-zerotrust/evidence/watch-state.json")
 
 
 def load_state() -> set:
@@ -71,9 +72,9 @@ def main(argv=None) -> int:
     ap.add_argument("--interval", type=int, default=60,
                     help="poll interval in seconds (loop mode)")
     ap.add_argument("--events-dir",
-                    default=str(REPO / "deploy/tetragon/state/events"))
+                    default="/mnt/hdd22/agent-zerotrust/evidence/tetragon")
     ap.add_argument("--warpgate",
-                    default="https://<PROTECTED_HOST_IP>:8888")
+                    default=os.environ.get("WARGATE_URL", "https://127.0.0.1:8888"))
     ap.add_argument("--admin-user", default="admin")
     ap.add_argument("--admin-password-file",
                     default=str(REPO / "deploy/warpgate/state/admin-password.txt"))

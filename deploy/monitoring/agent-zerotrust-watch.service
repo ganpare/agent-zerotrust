@@ -7,6 +7,7 @@ Wants=network-online.target
 User=sungo
 WorkingDirectory=/mnt/ssd2tb/projects/Zero-trust
 # -u: unbuffered stdout so watcher lines reach the journal immediately
+Environment=WARGATE_URL=https://<PROTECTED_HOST_IP>:8888
 ExecStart=/usr/bin/python3 -u -m evidence.watch --interval 60
 Restart=on-failure
 RestartSec=15

@@ -28,6 +28,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from . import service, store
 from evidence.telegram import (TelegramConfigError, answer_callback,
                                edit_message, get_updates, load_config)
+from workers import gateway as worker_gateway
 
 REPO = __import__("pathlib").Path(__file__).resolve().parents[1]
 PROTOCOL_VERSION = "2025-06-18"
@@ -75,6 +76,65 @@ TOOLS = [
             "type": "object",
             "properties": {"request_id": {"type": "string"}},
             "required": ["request_id"],
+        },
+    },
+    {
+        "name": "list_worker_agents",
+        "description": (
+            "List available local CLI coding agents on the protected host (codex, dsh, "
+            "opencode, commandcode, vibe, agy) and supported targets "
+            "(linux or windows via ssh/mounts)."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "dispatch_worker_task",
+        "description": (
+            "Delegate a coding/system task to a local CLI agent on the protected host. "
+            "Use target='windows' when you want the worker agent to operate "
+            "on the Windows host (with full GPU & project "
+            "ownership via `ssh windows` or `/mnt/Win-*`). Use target='linux' "
+            "for local projects. Every task is safety-screened, audited, and "
+            "notifies the owner on Telegram."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "agent": {
+                    "type": "string",
+                    "description": "codex | dsh | opencode | commandcode | vibe | agy",
+                },
+                "instruction": {
+                    "type": "string",
+                    "description": "Clear task instruction for the worker agent",
+                },
+                "target": {
+                    "type": "string",
+                    "description": "linux (default) or windows",
+                },
+                "workdir": {
+                    "type": "string",
+                    "description": "Working directory on the protected host (default /mnt/ssd2tb/projects)",
+                },
+                "wait_seconds": {
+                    "type": "integer",
+                    "description": "Seconds to wait before returning running status (default 25, max 120)",
+                },
+            },
+            "required": ["agent", "instruction"],
+        },
+    },
+    {
+        "name": "get_worker_task",
+        "description": "Get status and output preview of a dispatched worker task.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"task_id": {"type": "string"}},
+            "required": ["task_id"],
         },
     },
 ]
@@ -129,6 +189,41 @@ def dispatch(method: str, params: dict, env: dict) -> tuple[dict | None, int]:
             if view is None:
                 return _tool_result({"request_id": rid,
                                       "status": "unknown"}), 200
+            return _tool_result(view), 200
+        if name == "list_worker_agents":
+            agents = worker_gateway.discover_agents()
+            return _tool_result({
+                "available_agents": sorted(agents.keys()),
+                "targets": ["linux", "windows"],
+                "allowed_linux_roots": list(worker_gateway.ALLOWED_LINUX_ROOTS),
+            }), 200
+        if name == "dispatch_worker_task":
+            agent = str(args.get("agent", "")).strip()
+            instruction = str(args.get("instruction", "")).strip()
+            if not agent or not instruction:
+                return _error_result("agent and instruction are required"), 200
+            target = str(args.get("target", "linux")).strip() or "linux"
+            workdir = str(args.get("workdir", "/mnt/ssd2tb/projects")).strip() or "/mnt/ssd2tb/projects"
+            try:
+                wait_s = int(args.get("wait_seconds", 25))
+            except (TypeError, ValueError):
+                wait_s = 25
+            try:
+                view = worker_gateway.dispatch_task(
+                    agent=agent,
+                    instruction=instruction,
+                    target=target,
+                    workdir=workdir,
+                    wait_seconds=wait_s,
+                )
+            except ValueError as exc:
+                return _error_result(str(exc)), 200
+            return _tool_result(view), 200
+        if name == "get_worker_task":
+            tid = str(args.get("task_id", "")).strip()
+            view = worker_gateway.get_task(tid)
+            if view is None:
+                return _tool_result({"task_id": tid, "status": "unknown"}), 200
             return _tool_result(view), 200
         return _error_result(f"unknown tool: {name}"), 200
     return None, 404
@@ -254,7 +349,7 @@ def main() -> int:
                       ).read_text().strip()
     Handler.env = {
         "admin_password": admin_password,
-        "events_dir": str(REPO / "deploy/tetragon/state/events"),
+        "events_dir": "/mnt/hdd22/agent-zerotrust/evidence/tetragon",
     }
     try:
         config = load_config()

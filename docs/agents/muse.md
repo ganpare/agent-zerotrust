@@ -30,8 +30,12 @@ Transfer the agent key to Muse's host (from the protected host:
 
     url: http://<PROTECTED_HOST_IP>:8930/mcp
     tools:
-      request_approval(action, justification)  -> returns pending immediately
-      get_approval(request_id)                 -> pending | approved | denied | expired
+      request_approval(action, justification, ...)  -> returns pending immediately
+      get_approval(request_id)                      -> pending | approved | denied | expired
+      list_worker_agents()                          -> available CLI agents (codex, dsh, opencode, commandcode, vibe, agy)
+      dispatch_worker_task(agent, instruction, target="linux"|"windows", workdir=..., wait_seconds=25)
+                                                    -> delegates work to a local agent (use target="windows" to operate on the Windows host with RTX 4090)
+      get_worker_task(task_id)                      -> status + output preview of a running/completed worker task
 
 ## 4. Instructions for Muse (paste into its system prompt / AGENTS.md)
 

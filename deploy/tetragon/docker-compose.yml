@@ -16,8 +16,8 @@ services:
       - --export-file-perm=644
       # Time-based rotation: every 15 minutes a complete, immutable file
       # closes — the evidence pull ships exactly these, incrementally.
-      - --export-file-rotation-interval=15m
+      - --export-file-rotation-interval=1h
     volumes:
       - /sys/kernel/btf/vmlinux:/var/lib/tetragon/btf:ro
       - ./policies:/etc/tetragon/tetragon.tp.d:ro
-      - ./state/events:/var/log/tetragon-events
+      - /mnt/hdd22/agent-zerotrust/evidence/tetragon:/var/log/tetragon-events

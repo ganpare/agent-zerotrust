@@ -94,7 +94,16 @@ class McpDispatchTest(unittest.TestCase):
     def test_tools_list_shape(self):
         result, _ = mcp_server.dispatch("tools/list", {}, self.ENV)
         names = {t["name"] for t in result["tools"]}
-        self.assertEqual(names, {"request_approval", "get_approval"})
+        self.assertEqual(
+            names,
+            {
+                "request_approval",
+                "get_approval",
+                "list_worker_agents",
+                "dispatch_worker_task",
+                "get_worker_task",
+            },
+        )
         for tool in result["tools"]:
             self.assertIn("inputSchema", tool)
             self.assertIn("required", tool["inputSchema"])

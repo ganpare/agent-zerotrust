@@ -10,6 +10,7 @@ Implements the Phase 2 advisory flow (architecture §8):
 """
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 
@@ -27,7 +28,7 @@ REPO = __import__("pathlib").Path(__file__).resolve().parents[1]
 
 
 def _warpgate(admin_password: str) -> WarpgateClient:
-    client = WarpgateClient("https://<PROTECTED_HOST_IP>:8888", "admin",
+    client = WarpgateClient(os.environ.get("WARGATE_URL", "https://127.0.0.1:8888"), "admin",
                             admin_password)
     return client.login()
 

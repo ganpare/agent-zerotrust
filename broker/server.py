@@ -38,7 +38,8 @@ SOCKET_PATH = os.environ.get("AZT_BROKER_SOCKET", "/run/agent-zerotrust/broker.s
 KEY_PATH = os.environ.get(
     "AZT_LEASE_KEY", os.path.join(REPO, "deploy/broker/state/lease.key"))
 LEDGER_PATH = os.environ.get(
-    "AZT_LEDGER_PATH", os.path.join(REPO, "deploy/broker/state/ledger.sqlite3"))
+    "AZT_LEDGER_PATH",
+    "/mnt/hdd22/agent-zerotrust/evidence/broker/ledger.sqlite3")
 AGENT_UID = int(os.environ.get("AZT_AGENT_UID", "1001"))  # ai-muse
 EXEC_TIMEOUT = 60
 

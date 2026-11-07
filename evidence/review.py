@@ -82,9 +82,9 @@ def main(argv=None) -> int:
     ap.add_argument("--notify-dry-run", action="store_true",
                     help="print the Telegram message without sending")
     ap.add_argument("--events-dir",
-                    default=str(REPO / "deploy/tetragon/state/events"))
+                    default="/mnt/hdd22/agent-zerotrust/evidence/tetragon")
     ap.add_argument("--warpgate",
-                    default=os.environ.get("WARGATE_URL", "https://<PROTECTED_HOST_IP>:8888"))
+                    default=os.environ.get("WARGATE_URL", "https://127.0.0.1:8888"))
     ap.add_argument("--admin-user", default="admin")
     ap.add_argument("--admin-password-file",
                     default=str(REPO / "deploy/warpgate/state/admin-password.txt"))

@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-STORE_PATH = REPO / "deploy/approvals/state/requests.jsonl"
+STORE_PATH = Path("/mnt/hdd22/agent-zerotrust/evidence/approvals/requests.jsonl")
 
 VALID_DECISIONS = ("approved", "denied")
 
