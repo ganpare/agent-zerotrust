@@ -58,19 +58,45 @@ monitoring host.
   explicit `args` type declarations (`file`, `int`); a wrong `matchArgs`
   index aborts the daemon at startup
 
-## Remaining for Milestone 1
+## Remaining for Milestone 1 (user actions)
 
-- [ ] **Tailscale ACL** (user action, admin console): apply
+- [ ] **Full T5 validation from a second tailnet device** (any device
+      except <MONITORING_HOST>): `ssh -p 22 <PROTECTED_HOST_IP>` must FAIL,
+      `ssh -p 2222` must reach warpgate
+- [ ] **Tailscale ACL** (admin console): apply
       [policies/network/tailscale-acl.draft.hujson](../policies/network/tailscale-acl.draft.hujson)
-      — tag devices, allow the agent only `:2222`, deny direct `22`;
-      review against existing tailnet flows first
-- [ ] Muse's host joins the tailnet (`tag:agent-muse`) and receives the
-      client key (`deploy/warpgate/state/muse-client-key` — transfer
-      securely, it is gitignored)
-- [ ] Evidence pull on <MONITORING_HOST> (interim monitoring host) —
-      [deploy/monitoring/pull-evidence.ps1](monitoring/pull-evidence.ps1)
-- [ ] sshd hardening: once the ACL is in place, restrict direct `22` to
-      admin sources; until then **direct SSH remains possible and
-      Milestone 1 is not met**
-- [ ] Validation runs of the `tests/security/` scenarios (bypass
-      attempt, planted-secret read, correlation)
+      — device tags, agent → `:2222` only; the host-side nftables block
+      is already active, the ACL adds the tailnet-level layer
+- [ ] Muse's host joins the tailnet (`tag:agent-muse`) and receives
+      `deploy/warpgate/state/muse-client-key` (transfer securely)
+- [ ] Evidence pull on <MONITORING_HOST>: transfer
+      `deploy/warpgate/state/evidence-collector-key` to <MONITORING_HOST>, then
+      schedule [deploy/monitoring/pull-evidence.ps1](monitoring/pull-evidence.ps1)
+- [ ] Verify a session recording replays in the warpgate admin UI
+      (`https://<PROTECTED_HOST_IP>:8888/@warpgate/admin` → Recordings)
+
+## Host-side controls already in place (verified)
+
+- [x] **Direct-SSH bypass blocked at the host**: iptables/nftables rule
+      drops `:22` arriving over `tailscale0` except <MONITORING_HOST>
+      (<MONITORING_HOST_IP>); persisted via `agent-zerotrust-firewall.service`
+      (`/usr/local/sbin/azt-firewall.sh`). Remove with the iptables -D
+      command in that script's comment. Admin LAN SSH (<LAN_IP>)
+      is unaffected; warpgate → `127.0.0.1:22` is unaffected.
+- [x] **Evidence collector**: `evidence-collector` user (read-only
+      SFTP via `ForceCommand internal-sftp -R`, no TTY/forwarding);
+      spool dirs group-readable by `evidence` only — `ai-muse` cannot
+      traverse them (SR3)
+- [x] **Local acceptance tests**: `tests/security/run-phase1.sh` —
+      8/8 PASS (SR2 correlation + ancestry, T2 canary read captured,
+      T4 connect captured, T6 evidence unreadable/undeletable,
+      collector read-only); T5 rule verified active via privileged
+      check
+
+## Hardening notes (not blocking Milestone 1)
+
+- sshd has `PasswordAuthentication yes` globally. With the TS bypass
+  block, exposure is LAN-only — consider disabling password auth after
+  confirming no one needs it.
+- The canary fixture `/home/ai-muse/canary-secret.txt` is a permanent
+  T2 test fixture; it contains no real secret.
