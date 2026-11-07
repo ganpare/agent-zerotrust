@@ -26,7 +26,9 @@ summary: brief natural-language explanation (at most 3 sentences)
 uncertainties: list of up to 5 short strings
 evidence_ids: list of IDs actually present in the input that support your claims
 suggested_next_step: review | clarify | escalate
-Do not include any allow/deny/authorization decision."""
+Write summary and uncertainties in Japanese (日本語で). Keep the JSON field
+names and the enum values exactly as specified. Do not include any
+allow/deny/authorization decision."""
 
 @dataclass(frozen=True)
 class OpenAICompatibleBackend:

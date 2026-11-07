@@ -58,16 +58,16 @@ class RuleBackend:
             if action.startswith("read ") and any(
                     p in action[5:] for p in SENSITIVE_READ):
                 self._flag(flags, flagged_ids, eid,
-                           f"sensitive file read: {action[5:]}")
+                           f"機密ファイル読み取り: {action[5:]}")
             elif action.startswith("write ") and any(
                     p in action[6:] for p in PERSISTENCE_WRITE):
                 self._flag(flags, flagged_ids, eid,
-                           f"persistence-relevant write: {action[6:]}")
+                           f"永続化につながる書き込み: {action[6:]}")
             elif action == "connect unix-socket":
                 continue  # local IPC, not egress
             elif action.startswith("connect ") and not _is_private(action[8:]):
                 self._flag(flags, flagged_ids, eid,
-                           f"external connect: {action[8:]}")
+                           f"外部接続: {action[8:]}")
 
         execs = sum(1 for e in case.get("evidence", [])
                    if e.get("action", "").startswith("exec "))
@@ -78,15 +78,15 @@ class RuleBackend:
 
         claim = case.get("claim", {})
         post_hoc = "no agent claim" in claim.get("purpose", "").lower()
-        uncertainties = ["Deterministic rule backend — no semantic analysis."]
+        uncertainties = ["決定論的ルールバックエンド — 意味解析は行いません。"]
         if post_hoc:
             uncertainties.append(
-                "No agent claim recorded — consistency cannot be assessed.")
+                "エージェントの申告（クレーム）が記録されていないため、"
+                "整合性は評価できません。")
 
         summary = (
-            f"{execs} command(s) executed; {reads} file read(s); "
-            f"{connects} connect(s). "
-            + (f"{len(flags)} risk flag(s)." if flags else "No rule flags.")
+            f"コマンド{execs}件、ファイル読み取り{reads}件、接続{connects}件。"
+            + (f"リスクフラグ{len(flags)}件。" if flags else "ルールフラグなし。")
         )
 
         return {

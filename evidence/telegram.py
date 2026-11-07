@@ -82,33 +82,75 @@ def send_message(config: dict, text: str) -> None:
 
 
 def format_briefing(result: dict) -> str:
-    """Render the review result as a fixed-template Telegram message."""
+    """Render the review result as a fixed-template Telegram message (ja).
+
+    Machine records stay English (OSS-facing); the human-facing briefing
+    is Japanese. Technical values (paths, binaries, enum values) are kept
+    as-is with Japanese glosses.
+    """
     session = result.get("request_id", "?")
     a = result.get("assessment", {})
+
+    consistency = a.get("consistency", "?")
+    consistency_ja = {
+        "aligned": "整合",
+        "partial": "部分整合",
+        "mismatch": "不整合",
+        "insufficient_evidence": "証拠不足",
+    }.get(consistency, consistency)
+
+    next_step = a.get("suggested_next_step", "?")
+    next_step_ja = {
+        "review": "人間レビュー",
+        "clarify": "確認要求",
+        "escalate": "エスカレーション",
+    }.get(next_step, next_step)
+
+    action_prefix_ja = (
+        ("read ", "読取 "),
+        ("write ", "書込 "),
+        ("connect ", "接続 "),
+        ("exec ", "実行 "),
+    )
+
+    def action_ja(action: str) -> str:
+        if action.startswith("ssh session via warpgate"):
+            return "SSHセッション（warpgate経由・記録済み）"
+        for prefix, ja in action_prefix_ja:
+            if action.startswith(prefix):
+                return ja + action[len(prefix):]
+        return action
+
+    summary = a.get("summary", "")
+    summary_map = {
+        "Guardian assessment unavailable; review the evidence and claim manually.":
+            "Guardian評価は利用できません — 証拠と申告を手動で確認してください。",
+    }
+    summary = summary_map.get(summary, summary)
+
     lines = [
-        "agent-zerotrust — session review",
-        f"session: {session}",
-        f"policy tier: {result.get('policy_tier', '?')}",
+        "agent-zerotrust — セッションレビュー",
+        f"セッション: {session}",
+        f"ポリシー段階: {result.get('policy_tier', '?')}",
         "",
-        "evidence:",
+        "証拠:",
     ]
     for ev in result.get("evidence", []):
-        lines.append(f"  [{ev.get('source', '?')}] {ev.get('action', '?')}")
-    lines += ["", f"assessment: {a.get('consistency', '?')}"]
-    lines.append(f"  {a.get('summary', '')}")
+        lines.append(f"  [{ev.get('source', '?')}] {action_ja(ev.get('action', '?'))}")
+    lines += ["", f"評価: {consistency}（{consistency_ja}）"]
+    lines.append(f"  {summary}")
     flagged = {ev.get("event_id"): ev.get("action")
-              for ev in result.get("evidence", [])}
+               for ev in result.get("evidence", [])}
     flags = [flagged.get(eid, eid) for eid in a.get("evidence_ids", [])]
     if flags:
-        lines.append("flags:")
+        lines.append("フラグ:")
         for f in dict.fromkeys(flags):  # dedupe, keep order
-            lines.append(f"  ! {f}")
-    lines.append(f"next step: {a.get('suggested_next_step', '?')}")
+            lines.append(f"  ! {action_ja(f)}")
+    lines.append(f"次の一手: {next_step}（{next_step_ja}）")
     for u in a.get("uncertainties", []):
-        lines.append(f"uncertainty: {u}")
+        lines.append(f"不確実性: {u}")
     lines.append("")
-    lines.append("decision required: this notification is advisory; "
-                 "approvals happen only in the gateway.")
+    lines.append("この通知は参考情報です。承認はゲートウェイでのみ行われます。")
     return "\n".join(lines)
 
 

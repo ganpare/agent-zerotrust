@@ -34,11 +34,11 @@ class FormatTest(unittest.TestCase):
     def test_briefing_contains_key_fields(self):
         text = format_briefing(SAMPLE)
         self.assertIn("session-review-abc123", text)
-        self.assertIn("read /home/ai-muse/canary-secret.txt", text)
-        self.assertIn("connect 93.184.216.34:80", text)
-        self.assertIn("insufficient_evidence", text)
-        self.assertIn("escalate", text)
-        self.assertIn("advisory", text)  # never implies a decision
+        self.assertIn("読取 /home/ai-muse/canary-secret.txt", text)
+        self.assertIn("接続 93.184.216.34:80", text)
+        self.assertIn("証拠不足", text)          # consistency gloss
+        self.assertIn("エスカレーション", text)    # next-step gloss
+        self.assertIn("参考情報", text)            # advisory notice
 
     def test_flags_deduplicated(self):
         # two evidence_ids pointing at the same action render once
@@ -46,7 +46,20 @@ class FormatTest(unittest.TestCase):
         sample["assessment"] = {**SAMPLE["assessment"],
                                 "evidence_ids": ["e2", "e2"]}
         text = format_briefing(sample)
-        self.assertEqual(text.count("! read /home/ai-muse/canary-secret.txt"), 1)
+        self.assertEqual(
+            text.count("! 読取 /home/ai-muse/canary-secret.txt"), 1)
+
+    def test_unavailable_summary_translated(self):
+        sample = dict(SAMPLE)
+        sample["assessment"] = {
+            "consistency": "insufficient_evidence",
+            "summary": "Guardian assessment unavailable; review the evidence "
+                       "and claim manually.",
+            "evidence_ids": [], "suggested_next_step": "review",
+            "uncertainties": [],
+        }
+        text = format_briefing(sample)
+        self.assertIn("手動で確認", text)
 
 
 class SplitTest(unittest.TestCase):
