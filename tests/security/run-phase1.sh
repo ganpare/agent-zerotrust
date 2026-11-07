@@ -18,7 +18,7 @@ REPO=$(cd "$(dirname "$0")/../.." && pwd)
 KEY="$REPO/deploy/warpgate/state/muse-client-key"
 COLKEY="$REPO/deploy/warpgate/state/evidence-collector-key"
 TS_IP=<PROTECTED_HOST_IP>
-SSH_OPTS=(-F none -i "$KEY" -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+SSH_OPTS=(-F none -i "$KEY" -p 22 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 TARGET="muse:<PROTECTED_HOST>-local@$TS_IP"
 EVENTS_DIR="$REPO/deploy/tetragon/state/events"
 MON_IP=<MONITORING_HOST_IP>   # <MONITORING_HOST> (monitoring host, exempted from the block)
@@ -100,7 +100,7 @@ if [ "$(id -u)" -eq 0 ]; then
     fi
     echo "  NOTE: full T5 validation requires a connection attempt from a"
     echo "        second tailnet device: ssh -p 22 $TS_IP must FAIL, and"
-    echo "        ssh -p 2222 must reach warpgate."
+    echo "        ssh -p 22 must reach warpgate."
 elif command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
     if sudo iptables -C INPUT -i tailscale0 -p tcp --dport 22 ! -s "$MON_IP" -j DROP >/dev/null 2>&1; then
         ok "nftables/iptables rule active (TS :22 blocked except $MON_IP)"

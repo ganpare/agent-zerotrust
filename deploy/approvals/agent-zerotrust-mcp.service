@@ -8,6 +8,7 @@ User=sungo
 WorkingDirectory=/mnt/ssd2tb/projects/Zero-trust
 ExecStart=/usr/bin/python3 -u -m approvals.mcp_server
 Environment=APPROVAL_PORT=8930
+Environment=APPROVAL_BIND=<PROTECTED_HOST_IP>
 Restart=on-failure
 RestartSec=10
 

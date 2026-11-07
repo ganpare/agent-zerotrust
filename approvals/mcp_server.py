@@ -228,8 +228,9 @@ def main() -> int:
     except TelegramConfigError as exc:
         print(f"mcp: telegram not configured — {exc}", file=sys.stderr)
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"mcp: approvals server on 127.0.0.1:{port}", file=sys.stderr)
+    bind = os.environ.get("APPROVAL_BIND", "127.0.0.1")
+    server = ThreadingHTTPServer((bind, port), Handler)
+    print(f"mcp: approvals server on {bind}:{port}", file=sys.stderr)
     server.serve_forever()
     return 0
 

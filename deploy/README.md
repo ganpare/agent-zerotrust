@@ -76,6 +76,30 @@ are met and validated. The evidence pipeline is live end-to-end:
   `g:evidence:rX` ACLs on the recordings tree so the collector can read
   them. `ai-muse` remains blocked by the `state/` dir (0750 sungo:evidence).
 
+## Access paths (port map)
+
+| Destination | What port 22 is | Who uses it |
+|---|---|---|
+| `<LAN_IP>:22` (LAN) | sshd, direct | the human owner (unchanged) |
+| `<PROTECTED_HOST_IP>:22` (Tailscale) | **Warpgate** (REDIRECT → its :2222 listener) | agents AND humans |
+| `127.0.0.1:22` (on-host) | sshd | warpgate targets, the evidence collector |
+
+Direct sshd does not exist on the tailnet (sshd binds LAN + loopback
+only — `70-azt-lan-only.conf`; note: Ubuntu 24.04 needs `ssh.socket`
+disabled, it bypasses ListenAddress). The TS:22 → 2222 redirect lives in
+`azt-firewall.sh` (PREROUTING for external, OUTPUT DNAT for local).
+
+Human paths through warpgate (recorded, full rights):
+
+    ssh -p 22 sun:<PROTECTED_HOST>-admin@<PROTECTED_HOST_IP>    # lands as sungo (sudo group)
+
+- warpgate user `sun` carries the owner's three existing client keys —
+  no new key to manage
+- target `<PROTECTED_HOST>-admin` → 127.0.0.1:22 as `sungo`; warpgate's client
+  key was added to sungo's authorized_keys
+- the agent identity (`muse`) has no role on this target — the muse key
+  cannot open the admin path (tested with a temp credential, then removed)
+
 ## Post-milestone follow-ups (not blocking)
 
 - [ ] **Tailscale ACL** (admin console): apply
