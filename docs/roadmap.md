@@ -42,7 +42,7 @@ Exit criteria: the acceptance checklist in
   distinct, provenance-labeled records
   ([architecture.md](architecture.md) §8.6); the review function
   prototype — one-shot, single swappable backend, advisory-only — is
-  implemented in `guardian/` (draft PR #2) and verified by adversarial
+  implemented in `guardian/` (PR #2, merged) and verified by adversarial
   tests (hostile model output, provider failure, malicious claims)
 - Constraints:
   - **Optional** — the Phase 1 floor keeps working without it (SR5)
@@ -71,7 +71,8 @@ Exit criteria: the acceptance checklist in
   [architecture.md](architecture.md) §8.8); land in observe/deny-only
   mode first
 - Acceptance harness: the twelve attack-oriented validation scenarios
-  from the evidence–intent proposal (draft PR #1), mapped to threat IDs
+  from the [evidence–intent proposal](proposals/evidence-intent-approval.md),
+  mapped to threat IDs
   in `tests/security/`
 - Rollout: **detect-only → ask → enforce** — never straight to blocking
 - Kill switch: revoke an agent's access without logging into the protected

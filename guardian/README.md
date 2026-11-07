@@ -98,4 +98,4 @@ The caller gets the normalized input and `assessment`, plus `decision_required=t
 
 A production deployment still needs a trusted Evidence API, schema versioning, principal/event correlation, lease/grant tracking, redaction rules, the MCP request/response path, approval storage/UI, privilege enforcement, and deployment isolation for agent-process backends. This PR provides the small, independently testable **review function** and backend swap point for those future pieces.
 
-See [architecture](../docs/architecture.md), [roadmap](../docs/roadmap.md) and the separate [execution/approval proposal](../docs/proposals/evidence-intent-approval.md) on its own draft branch.
+See [architecture](../docs/architecture.md), [roadmap](../docs/roadmap.md) and the [execution/approval proposal](../docs/proposals/evidence-intent-approval.md).

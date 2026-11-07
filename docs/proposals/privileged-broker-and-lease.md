@@ -4,8 +4,7 @@
 compare before committing to an approach; **Phase 1 (Warpgate + Tetragon)
 remains the priority**; no broker/lease implementation yet.
 **Related:** [architecture](../architecture.md) §8.7–8.8;
-[threat model](../threat-model.md) T13, SR8, SR10; evidence–intent
-proposal (draft PR #1).
+[threat model](../threat-model.md) T13, SR8, SR10; [evidence–intent proposal](evidence-intent-approval.md).
 
 ## 1. The requirement
 

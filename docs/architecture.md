@@ -265,7 +265,7 @@ never instructions — to the Guardian or to the human briefing; the
 briefing renders the four records as distinct labeled fields, and the
 "what will actually run" line comes from the enforcement record, not the
 claim. A prototype of the review function (one-shot, single swappable
-backend, advisory-only) is implemented in `guardian/` (draft PR #2) and
+backend, advisory-only) is implemented in `guardian/` (PR #2, merged) and
 verified by adversarial tests: hostile model output, provider failure,
 and malicious claims cannot alter tiers, force grants, or block human
 review.
