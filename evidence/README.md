@@ -39,8 +39,23 @@ Phase 1 deployment.
 ## Design notes
 
 - **AI-optional floor**: the default backend is `RuleBackend` — pure rules,
-  no LLM. An LLM backend (`guardian.backends`) drops into the same
-  `evaluate()` call without touching this flow.
+  no LLM. An LLM backend drops into the same `evaluate()` call without
+  touching this flow (see below).
+- **LLM backends — including CLI agents**: the backend seam is
+  JSON-in/JSON-out (`GuardianBackend.assess(case) -> dict`), **not** a raw
+  LLM API. Three adapters via `GUARDIAN_BACKEND`:
+  - `rule` (default): deterministic floor
+  - `local`: any executable wrapper — CLI agents such as **Codex**
+    (`guardian/wrappers/codex_wrapper.py`, read-only sandbox, tested),
+    Claude Code, or Hermes — anything that reads the case JSON on stdin
+    and prints the assessment JSON
+  - `openai_compatible`: a chat-completions endpoint
+
+  ```bash
+  GUARDIAN_BACKEND=local \
+  GUARDIAN_COMMAND="python3 guardian/wrappers/codex_wrapper.py <CODEX_HOME> 240" \
+  python3 -m evidence.review --latest
+  ```
 - **Post-hoc reviews carry a placeholder claim** (clearly marked), so the
   assessment honestly reports `insufficient_evidence` for consistency —
   the four-record model does not pretend a comparison happened.

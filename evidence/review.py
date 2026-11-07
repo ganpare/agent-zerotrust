@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from pathlib import Path
 
@@ -31,6 +32,41 @@ from .tetragon import load_events
 from .warpgate import WarpgateClient
 
 REPO = Path(__file__).resolve().parents[1]
+
+
+def make_backend() -> tuple:
+    """Select the guardian backend from the environment.
+
+    GUARDIAN_BACKEND:
+      rule (default)      — deterministic AI-optional floor
+      local               — LocalProcessBackend (CLI agents: Codex,
+                            Claude Code, Hermes... via a JSON-in/JSON-out
+                            wrapper); requires GUARDIAN_COMMAND
+      openai_compatible  — chat-completions endpoint; requires
+                            GUARDIAN_ENDPOINT / GUARDIAN_MODEL / GUARDIAN_API_KEY
+    """
+    kind = os.environ.get("GUARDIAN_BACKEND", "rule").strip()
+    if kind == "rule":
+        return RuleBackend(), "rule backend (AI-optional floor)"
+    if kind == "local":
+        from guardian.backends import LocalProcessBackend
+        command = os.environ.get("GUARDIAN_COMMAND", "").strip()
+        if not command:
+            raise SystemExit("GUARDIAN_BACKEND=local requires GUARDIAN_COMMAND")
+        timeout = float(os.environ.get("GUARDIAN_TIMEOUT", "300"))
+        backend = LocalProcessBackend(tuple(shlex.split(command)),
+                                       timeout_seconds=timeout)
+        return backend, f"local process backend ({command.split()[0]})"
+    if kind == "openai_compatible":
+        from guardian.backends import OpenAICompatibleBackend
+        backend = OpenAICompatibleBackend(
+            os.environ["GUARDIAN_ENDPOINT"],
+            os.environ["GUARDIAN_MODEL"],
+            os.environ["GUARDIAN_API_KEY"],
+            timeout_seconds=float(os.environ.get("GUARDIAN_TIMEOUT", "60")),
+        )
+        return backend, f"openai-compatible backend ({os.environ['GUARDIAN_MODEL']})"
+    raise SystemExit(f"unknown GUARDIAN_BACKEND: {kind}")
 
 
 def main(argv=None) -> int:
@@ -75,7 +111,8 @@ def main(argv=None) -> int:
         return 3
 
     case = build_case(session, correlated)
-    result = evaluate(case, RuleBackend())
+    backend, backend_label = make_backend()
+    result = evaluate(case, backend)
 
     if args.as_json:
         print(json.dumps(result, indent=2, ensure_ascii=False))
@@ -99,7 +136,7 @@ def main(argv=None) -> int:
         print(f"  [{ev['source']:8s}] {ev['action']}"
               + (f"  ({ev['detail'][:70]})" if ev.get("detail") else ""))
     print()
-    print("Assessment (rule backend — AI-optional floor):")
+    print(f"Assessment ({backend_label}):")
     print(f"  consistency : {a['consistency']}")
     print(f"  summary     : {a['summary']}")
     if a["evidence_ids"]:

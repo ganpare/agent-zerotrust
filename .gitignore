@@ -25,6 +25,9 @@ deploy/*/local/
 # Runtime state (keys, passwords, cookies, recordings, DB) — never commit
 deploy/*/state/
 
+# Relocated codex home for the guardian wrapper (contains auth.json!)
+.codex-home/
+
 # Python bytecode
 __pycache__/
 *.py[cod]

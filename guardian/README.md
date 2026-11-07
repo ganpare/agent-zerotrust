@@ -99,3 +99,15 @@ The caller gets the normalized input and `assessment`, plus `decision_required=t
 A production deployment still needs a trusted Evidence API, schema versioning, principal/event correlation, lease/grant tracking, redaction rules, the MCP request/response path, approval storage/UI, privilege enforcement, and deployment isolation for agent-process backends. This PR provides the small, independently testable **review function** and backend swap point for those future pieces.
 
 See [architecture](../docs/architecture.md), [roadmap](../docs/roadmap.md) and the [execution/approval proposal](../docs/proposals/evidence-intent-approval.md).
+
+## CLI wrappers (bundled)
+
+- [`wrappers/codex_wrapper.py`](wrappers/codex_wrapper.py) — Codex CLI as
+  the reviewer brain: case JSON on stdin → `codex exec --json
+  --sandbox read-only` → assessment JSON on stdout. The reviewer agent can
+  only produce text (read-only sandbox, no network, no writes). Pass a
+  relocated `CODEX_HOME` as the first argument when `~/.codex` is not
+  writable (e.g. inside a file sandbox) — copy `auth.json` and
+  `config.toml` there first.
+  Claude Code / Hermes wrappers follow the same shape: read the case,
+  invoke the CLI headless with tools disabled, extract the JSON.
