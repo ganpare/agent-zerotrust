@@ -45,17 +45,29 @@ Phase 1 deployment.
   JSON-in/JSON-out (`GuardianBackend.assess(case) -> dict`), **not** a raw
   LLM API. Three adapters via `GUARDIAN_BACKEND`:
   - `rule` (default): deterministic floor
-  - `local`: any executable wrapper — CLI agents such as **Codex**
-    (`guardian/wrappers/codex_wrapper.py`, read-only sandbox, tested),
-    Claude Code, or Hermes — anything that reads the case JSON on stdin
-    and prints the assessment JSON
+  - `local`: any executable wrapper — CLI agents. Bundled and tested:
+    **Codex** (`guardian/wrappers/codex_wrapper.py`, read-only sandbox)
+    and **DSH** (`guardian/wrappers/dsh_wrapper.py`, `dsh headless`).
+    Claude Code / Hermes follow the same shape once their CLIs are on
+    this host
   - `openai_compatible`: a chat-completions endpoint
 
   ```bash
   GUARDIAN_BACKEND=local \
-  GUARDIAN_COMMAND="python3 guardian/wrappers/codex_wrapper.py <CODEX_HOME> 240" \
-  python3 -m evidence.review --latest
+  GUARDIAN_COMMAND="python3 guardian/wrappers/dsh_wrapper.py <DSH_HOME> 240" \
+  python -m evidence.review --latest
   ```
+- **Telegram adapter** (IDS alert channel): fixed-template, redacted
+  briefing; no secrets by construction. Configure `TELEGRAM_BOT_TOKEN` +
+  `TELEGRAM_CHAT_ID` (env or `deploy/monitoring/state/telegram.json`),
+  verify with `python -m evidence.telegram --send-test`, preview with
+  `--print-template`, then:
+  `python -m evidence.review --latest --notify-telegram`
+  (`--notify-dry-run` prints the message without sending). Wrappers
+  relocate CODEX_HOME / DSH_HOME into the workspace when the default is
+  not writable (contains credentials — gitignored). Backend failures
+  degrade to `unavailable` + human review (fail-safe, exercised for
+  real during bring-up).
 - **Post-hoc reviews carry a placeholder claim** (clearly marked), so the
   assessment honestly reports `insufficient_evidence` for consistency —
   the four-record model does not pretend a comparison happened.

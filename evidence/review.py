@@ -76,6 +76,11 @@ def main(argv=None) -> int:
                     help="review the newest completed muse session")
     ap.add_argument("--json", action="store_true", dest="as_json",
                     help="print the full result as JSON")
+    ap.add_argument("--notify-telegram", action="store_true",
+                    help="send the briefing to Telegram (needs "
+                         "TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID)")
+    ap.add_argument("--notify-dry-run", action="store_true",
+                    help="print the Telegram message without sending")
     ap.add_argument("--events-dir",
                     default=str(REPO / "deploy/tetragon/state/events"))
     ap.add_argument("--warpgate",
@@ -149,6 +154,20 @@ def main(argv=None) -> int:
     print(f"  next step   : {a['suggested_next_step']}")
     for u in a["uncertainties"]:
         print(f"  uncertainty : {u}")
+
+    if args.notify_dry_run:
+        from .telegram import format_briefing
+        print("\n=== Telegram message (dry run) ===")
+        print(format_briefing(result))
+    if args.notify_telegram:
+        from .telegram import TelegramConfigError, format_briefing, load_config, send_message
+        try:
+            config = load_config()
+            send_message(config, format_briefing(result))
+            print("\nTelegram: briefing sent")
+        except TelegramConfigError as exc:
+            print(f"\nTelegram: {exc}", file=sys.stderr)
+            return 4
     return 0
 
 

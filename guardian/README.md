@@ -109,5 +109,15 @@ See [architecture](../docs/architecture.md), [roadmap](../docs/roadmap.md) and t
   relocated `CODEX_HOME` as the first argument when `~/.codex` is not
   writable (e.g. inside a file sandbox) — copy `auth.json` and
   `config.toml` there first.
-  Claude Code / Hermes wrappers follow the same shape: read the case,
-  invoke the CLI headless with tools disabled, extract the JSON.
+- [`wrappers/dsh_wrapper.py`](wrappers/dsh_wrapper.py) — DSH
+  (`dsh headless`) as the reviewer brain: same JSON-in/JSON-out contract.
+  Discovers the dsh binary even under a minimal PATH (nvm). Pass a
+  relocated `DSH_HOME` as the first argument when `~/.dsh` is not
+  writable — copy the `~/.dsh` tree there first (it contains harness
+  credentials; keep it out of git). Note: unlike Codex's read-only
+  sandbox, a DSH reviewer runs with the invoking user's tool policy —
+  on an unsandboxed deployment, run the guardian under its own
+  confinement (the reviewer must only produce text — SR10).
+
+Claude Code / Hermes wrappers follow the same shape: read the case,
+invoke the CLI headless with tools disabled, extract the JSON.
