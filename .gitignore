@@ -21,6 +21,9 @@ evidence/
 # Local deployment state
 deploy/*/local/
 
+# Runtime state (keys, passwords, cookies, recordings, DB) — never commit
+deploy/*/state/
+
 # Python bytecode
 __pycache__/
 *.py[cod]

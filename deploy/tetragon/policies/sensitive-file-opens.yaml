@@ -1,22 +1,67 @@
 apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
-  name: sensitive-file-opens
+  name: agent-sensitive-file-access
 spec:
+  # Based on cilium/tetragon examples/quickstart/file_monitoring.yaml,
+  # scoped to the acting agent's UID (kernel-side current_task cred filter)
+  # so a busy host does not flood the evidence stream.
   kprobes:
-    - call: security_file_open
+    - call: "security_file_permission"
       syscall: false
+      return: true
+      data:
+        - index: 0
+          type: "int"
+          source: "current_task"
+          resolve: "cred.uid.val"
+      args:
+        - index: 0
+          type: "file" # (struct file *) used for getting the path
+        - index: 1
+          type: "int" # 0x04 is MAY_READ, 0x02 is MAY_WRITE
+      returnArg:
+        index: 0
+        type: "int"
       selectors:
-        # Sensitive-path opens by any process — the T2 evidence
-        # (credential/secret reads). /home/ is broad on purpose for the
-        # PoC: it covers ~/.ssh, .env, and agent workspace files.
-        # Tune the noise after the first observation run.
-        - matchArgs:
+        # Agent reads of sensitive paths (T2: credential/secret hunting)
+        - matchData:
             - index: 0
-              operator: Prefix
+              operator: "Equal"
               values:
-                - /etc/shadow
-                - /etc/passwd
-                - /etc/ssh/
-                - /home/
-                - /root/
+                - "1001" # ai-muse
+          matchArgs:
+            - index: 0
+              operator: "Prefix"
+              values:
+                - "/etc/shadow"
+                - "/etc/passwd"
+                - "/etc/ssh/"
+                - "/etc/sudoers"
+                - "/root/"
+                - "/home/" # any home: other users' ~/.ssh, .env, etc.
+            - index: 1
+              operator: "Equal"
+              values:
+                - "4" # MAY_READ
+        # Agent writes to system locations (T8: persistence)
+        - matchData:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "1001" # ai-muse
+          matchArgs:
+            - index: 0
+              operator: "Prefix"
+              values:
+                - "/etc"
+                - "/usr/bin"
+                - "/usr/sbin"
+                - "/usr/local/bin"
+                - "/usr/local/sbin"
+                - "/var/log"
+                - "/root/.ssh"
+            - index: 1
+              operator: "Equal"
+              values:
+                - "2" # MAY_WRITE

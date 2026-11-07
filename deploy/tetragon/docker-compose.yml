@@ -6,7 +6,15 @@ services:
     # Privileged is REQUIRED to load and attach BPF programs (eBPF).
     privileged: true
     pid: host
-    cgroupns: host
+    cgroup: host
+    # Export all events (exec by default + tracing policies) as JSONL —
+    # this file is the evidence-pipeline pickup point.
+    command:
+      - --export-filename=/var/log/tetragon-events/tetragon.json
+      - --export-file-max-size-mb=100
+      - --export-file-max-backups=5
+      - --export-file-perm=644
     volumes:
       - /sys/kernel/btf/vmlinux:/var/lib/tetragon/btf:ro
       - ./policies:/etc/tetragon/tetragon.tp.d:ro
+      - ./state/events:/var/log/tetragon-events
