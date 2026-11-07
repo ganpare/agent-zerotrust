@@ -215,7 +215,7 @@ def dispatch_task(
             "agent": agent,
             "target": target,
             "workdir": resolved_dir,
-            "instruction": instruction[:1000],
+            "instruction": instruction,
             "created_at": now,
         }
         _append_event({"type": "task_blocked", **rec})
@@ -224,7 +224,7 @@ def dispatch_task(
             f"タスクID: {task_id}\n"
             f"エージェント: {agent} ({target})\n"
             f"理由: {violation}\n"
-            f"依頼内容: {instruction[:300]}"
+            f"依頼内容:\n{instruction}"
         )
         return rec
 
@@ -238,7 +238,7 @@ def dispatch_task(
         "agent": agent,
         "target": target,
         "workdir": resolved_dir,
-        "instruction": instruction[:1000],
+        "instruction": instruction,
         "created_at": now,
         "ended_at": None,
         "returncode": None,
@@ -254,7 +254,7 @@ def dispatch_task(
         f"タスクID: {task_id}\n"
         f"エージェント: {agent} (対象: {target})\n"
         f"作業場所: {resolved_dir}\n"
-        f"依頼: {instruction[:250]}"
+        f"依頼:\n{instruction}"
     )
 
     done_event = threading.Event()
@@ -298,7 +298,8 @@ def dispatch_task(
 
         EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
         Path(task_state["output_file"]).write_text(combined, encoding="utf-8")
-        preview = combined.strip()[-1500:] if combined else "(no output)"
+        full_output = combined.strip() if combined else "(no output)"
+        preview = full_output[-1500:]
 
         with _TASKS_LOCK:
             task_state["status"] = status
@@ -313,7 +314,7 @@ def dispatch_task(
             f"{icon} agent-zerotrust — ワーカータスク完了 ({status})\n"
             f"タスクID: {task_id} ({duration}秒)\n"
             f"エージェント: {agent} (対象: {target})\n"
-            f"結果抜粋:\n{preview[:600]}"
+            f"結果:\n{full_output}"
         )
         done_event.set()
 
