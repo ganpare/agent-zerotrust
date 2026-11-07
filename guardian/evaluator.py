@@ -111,7 +111,8 @@ def _assessment(raw: Any, event_ids: set[str]) -> dict[str, Any]:
         consistency = "insufficient_evidence"
         next_step = "review" if next_step != "escalate" else "escalate"
         if "No observed evidence was supplied." not in uncertainties:
-            uncertainties.append("No observed evidence was supplied.")
+            uncertainties = ["No observed evidence was supplied.",
+                             *uncertainties[:4]]
 
     return {
         "status": "complete",
