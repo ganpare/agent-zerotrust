@@ -22,7 +22,9 @@ $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 New-Item -ItemType Directory -Force -Path "$LocalRoot\warpgate" | Out-Null
 New-Item -ItemType Directory -Force -Path "$LocalRoot\tetragon" | Out-Null
 
-# Warpgate session recordings (SQLite DB) and the Tetragon event stream (JSONL)
+# Warpgate session recordings (casts + SQLite DB) and the Tetragon event
+# stream (JSONL)
+scp -r "${Remote}:${RepoRoot}/warpgate/state/recordings" "$LocalRoot\warpgate\$Stamp"
 scp -r "${Remote}:${RepoRoot}/warpgate/state/db" "$LocalRoot\warpgate\$Stamp"
 scp -r "${Remote}:${RepoRoot}/tetragon/state/events" "$LocalRoot\tetragon\$Stamp"
 

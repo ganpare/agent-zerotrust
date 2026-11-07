@@ -60,33 +60,43 @@ monitoring host.
 
 ## Remaining for Milestone 1 (user actions)
 
-- [ ] **Full T5 validation from a second tailnet device** (any device
-      except <MONITORING_HOST>): `ssh -p 22 <PROTECTED_HOST_IP>` must FAIL,
-      `ssh -p 2222` must reach warpgate
 - [ ] **Tailscale ACL** (admin console): apply
       [policies/network/tailscale-acl.draft.hujson](../policies/network/tailscale-acl.draft.hujson)
       — device tags, agent → `:2222` only; the host-side nftables block
-      is already active, the ACL adds the tailnet-level layer
+      is already active and **fully validated** (below), the ACL adds
+      the tailnet-level layer
 - [ ] Muse's host joins the tailnet (`tag:agent-muse`) and receives
       `deploy/warpgate/state/muse-client-key` (transfer securely)
 - [ ] Evidence pull on <MONITORING_HOST>: transfer
       `deploy/warpgate/state/evidence-collector-key` to <MONITORING_HOST>, then
       schedule [deploy/monitoring/pull-evidence.ps1](monitoring/pull-evidence.ps1)
-- [ ] Verify a session recording replays in the warpgate admin UI
+      (the exact scp commands were verified from the collector identity;
+      the pull now includes the recordings casts)
+- [ ] Eyeball a session recording replay in the warpgate admin UI
       (`https://<PROTECTED_HOST_IP>:8888/@warpgate/admin` → Recordings)
 
 ## Host-side controls already in place (verified)
 
-- [x] **Direct-SSH bypass blocked at the host**: iptables/nftables rule
-      drops `:22` arriving over `tailscale0` except <MONITORING_HOST>
-      (<MONITORING_HOST_IP>); persisted via `agent-zerotrust-firewall.service`
-      (`/usr/local/sbin/azt-firewall.sh`). Remove with the iptables -D
-      command in that script's comment. Admin LAN SSH (<LAN_IP>)
-      is unaffected; warpgate → `127.0.0.1:22` is unaffected.
+- [x] **Direct-SSH bypass blocked AND validated end-to-end**: iptables/
+      nftables rule drops `:22` arriving over `tailscale0` except
+      <MONITORING_HOST>; persisted via `agent-zerotrust-firewall.service`. Tested
+      from a real second tailnet device (<TEST_DEVICE>,
+      <TEST_DEVICE_IP>): `ssh -p 22 <PROTECTED_HOST_IP>` → **connection timed out**
+      (dropped); `ssh -p 2222` → **warpgate auth reached**. Admin LAN
+      SSH (<LAN_IP>) unaffected; warpgate → `127.0.0.1:22`
+      unaffected.
+- [x] **Session recording enabled and verified**: `recordings_enable`
+      was `false` after unattended-setup (recordings are a global
+      parameter: `Config → Global parameters → Session recordings`, or
+      `PUT /parameters`); enabled via the admin API. A test session
+      produced a Terminal cast (metadata via
+      `GET /sessions/{id}/recordings`, files under
+      `deploy/warpgate/state/recordings/`). Sessions before enabling
+      have metadata but no cast.
 - [x] **Evidence collector**: `evidence-collector` user (read-only
       SFTP via `ForceCommand internal-sftp -R`, no TTY/forwarding);
       spool dirs group-readable by `evidence` only — `ai-muse` cannot
-      traverse them (SR3)
+      traverse them (SR3); the exact `scp -r` pull commands verified
 - [x] **Local acceptance tests**: `tests/security/run-phase1.sh` —
       8/8 PASS (SR2 correlation + ancestry, T2 canary read captured,
       T4 connect captured, T6 evidence unreadable/undeletable,
