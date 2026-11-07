@@ -29,16 +29,17 @@ def exec_event(exec_id, parent_id, binary, args, uid, t, parent_binary="/usr/sbi
     }
 
 
-def kprobe_event(exec_id, parent_id, binary, t, function, args, policy="p"):
-    return {
-        "time": t,
-        "process_kprobe": {
-            "process": {"exec_id": exec_id, "pid": 101, "uid": 1001,
-                        "binary": binary, "arguments": "",
-                        "parent_exec_id": parent_id},
-            "function_name": function, "args": args, "policy_name": policy,
-        },
+def kprobe_event(exec_id, parent_id, binary, t, function, args, policy="p",
+                 ret=None):
+    kp = {
+        "process": {"exec_id": exec_id, "pid": 101, "uid": 1001,
+                    "binary": binary, "arguments": "",
+                    "parent_exec_id": parent_id},
+        "function_name": function, "args": args, "policy_name": policy,
     }
+    if ret is not None:
+        kp["return"] = {"long_arg": ret}
+    return {"time": t, "process_kprobe": kp}
 
 
 SESSION = {
@@ -85,6 +86,16 @@ EVENTS = [
                  "security_socket_connect",
                  [{"sockaddr_arg": {"family": "AF_UNIX", "addr": "invalid IP"}}],
                  policy="agent-outbound-connects"),
+    # kprobe: DENIED open of another user's home (the owner's live-test case)
+    kprobe_event("e2", "e1", "/usr/bin/ls", "2026-11-07T10:00:07Z",
+                 "do_filp_open",
+                 [{"filename_arg": "/home/sungo"}],
+                 policy="agent-sensitive-file-access", ret=-13),
+    # kprobe: allowed open of the agent's own file (must NOT be flagged)
+    kprobe_event("e1", "sshd1", "/bin/bash", "2026-11-07T10:00:08Z",
+                 "do_filp_open",
+                 [{"filename_arg": "/home/ai-muse/.bashrc"}],
+                 policy="agent-sensitive-file-access", ret=-124136177906688),
 ]
 
 
@@ -99,7 +110,7 @@ class CorrelateTest(unittest.TestCase):
         self.assertEqual(binaries, {"/bin/bash", "/usr/bin/cat", "/usr/bin/curl"})
         self.assertNotIn("e0", ids)  # outside the window
         self.assertNotIn("e9", ids)  # uid matches but not under the shell
-        self.assertEqual(len(correlated["kprobes"]), 4)
+        self.assertEqual(len(correlated["kprobes"]), 6)
 
     def test_returns_none_when_no_shell_in_window(self):
         late = {**SESSION, "started": "2026-11-07T11:00:00Z",
@@ -131,6 +142,15 @@ class CaseAndAssessmentTest(unittest.TestCase):
         self.assertIn("connect 93.184.216.34:80", flagged_actions)
         self.assertNotIn("connect <PROTECTED_HOST_IP>:22", flagged_actions)
         self.assertNotIn("connect unix-socket", flagged_actions)
+        # the denied open of another user's home IS flagged
+        self.assertIn("open /home/sungo", flagged_actions)
+        # the allowed open of the agent's own file is NOT flagged
+        self.assertNotIn("open /home/ai-muse/.bashrc", flagged_actions)
+
+        # outcomes: denied vs allowed
+        outcomes = {e["action"]: e["outcome"] for e in result["evidence"]}
+        self.assertEqual(outcomes.get("open /home/sungo"), "denied")
+        self.assertEqual(outcomes.get("open /home/ai-muse/.bashrc"), "allowed")
 
         self.assertEqual(result["assessment"]["suggested_next_step"], "escalate")
         # post-hoc review: no claim to compare against

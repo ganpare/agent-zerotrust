@@ -68,6 +68,19 @@ class RuleBackend:
             elif action.startswith("connect ") and not _is_private(action[8:]):
                 self._flag(flags, flagged_ids, eid,
                            f"外部接続: {action[8:]}")
+            elif action.startswith("open ") and ev.get("outcome") == "denied":
+                # the agent TRIED to reach somewhere forbidden — the
+                # attempt itself is the signal
+                self._flag(flags, flagged_ids, eid,
+                           f"拒否されたアクセス試行: {action[5:]}")
+            elif action.startswith("open "):
+                path = action[5:]
+                if (path.startswith(("/root/", "/etc/ssh/", "/etc/shadow",
+                                     "/etc/sudoers"))
+                        or (path.startswith("/home/")
+                            and not path.startswith("/home/ai-muse/"))):
+                    self._flag(flags, flagged_ids, eid,
+                               f"機密パスへのアクセス: {path}")
 
         execs = sum(1 for e in case.get("evidence", [])
                    if e.get("action", "").startswith("exec "))

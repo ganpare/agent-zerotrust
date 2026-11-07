@@ -111,6 +111,7 @@ def format_briefing(result: dict) -> str:
         ("write ", "書込 "),
         ("connect ", "接続 "),
         ("exec ", "実行 "),
+        ("open ", "オープン "),
     )
 
     def action_ja(action: str) -> str:
@@ -136,7 +137,10 @@ def format_briefing(result: dict) -> str:
         "証拠:",
     ]
     for ev in result.get("evidence", []):
-        lines.append(f"  [{ev.get('source', '?')}] {action_ja(ev.get('action', '?'))}")
+        line = f"  [{ev.get('source', '?')}] {action_ja(ev.get('action', '?'))}"
+        if ev.get("outcome") == "denied":
+            line += "（拒否）"
+        lines.append(line)
     lines += ["", f"評価: {consistency}（{consistency_ja}）"]
     lines.append(f"  {summary}")
     flagged = {ev.get("event_id"): ev.get("action")

@@ -14,6 +14,12 @@ from .tetragon import event_time, parse_time
 
 MAX_EVENTS = 20
 
+# Paths whose OPEN attempts are evidence-worthy (the do_filp_open hook
+# emits every open; the builder keeps only these — kernel-side matchArgs
+# does not currently filter on filename args)
+SENSITIVE_OPEN_PREFIXES = ("/root/", "/home/", "/etc/ssh/",
+                           "/etc/shadow", "/etc/sudoers")
+
 
 def _fmt(t) -> str:
     return t.strftime("%Y-%m-%dT%H:%M:%SZ") if t else ""
@@ -44,6 +50,19 @@ def _connect_action(kp: dict) -> str:
         if family == "AF_UNIX":
             return "connect unix-socket"  # local IPC — not network egress
     return "connect (destination not recorded)"
+
+
+def _open_action(kp: dict) -> tuple[str, str] | None:
+    """do_filp_open: (action, outcome). Negative small return = denial."""
+    path = None
+    for a in kp.get("args") or []:
+        if isinstance(a, dict):
+            path = a.get("filename_arg") or a.get("string_arg") or path
+    if not path or not path.startswith(SENSITIVE_OPEN_PREFIXES):
+        return None  # not a sensitive path — drop the noise
+    ret = kp.get("return", {}).get("long_arg")
+    denied = isinstance(ret, int) and -4095 <= ret <= -1
+    return f"open {path}", ("denied" if denied else "allowed")
 
 
 def _item(event_id: str, source: str, action: str, outcome: str,
@@ -89,17 +108,25 @@ def build_case(session: dict, correlated: dict, claim: dict | None = None,
         fn = kp.get("function_name")
         if fn == "security_file_permission":
             action = _file_action(kp)
+            outcome = "allowed"
         elif fn == "security_socket_connect":
             action = _connect_action(kp)
+            outcome = "allowed"
+        elif fn == "do_filp_open":
+            parsed = _open_action(kp)
+            if parsed is None:
+                continue
+            action, outcome = parsed
         else:
             action = fn or "kprobe"
+            outcome = "allowed"
         if action is None:
             continue
         proc = kp.get("process") or {}
         items.append(_item(
             f"tg{seq:03d}-{(proc.get('exec_id') or '')[-12:]}",
             "tetragon",
-            action, "allowed", _fmt(event_time(e)),
+            action, outcome, _fmt(event_time(e)),
             f"policy={kp.get('policy_name', '')} binary={proc.get('binary', '')}",
         ))
     for e in correlated["execs"]:

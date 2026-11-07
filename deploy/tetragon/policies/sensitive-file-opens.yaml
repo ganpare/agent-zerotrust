@@ -65,3 +65,40 @@ spec:
               operator: "Equal"
               values:
                 - "2" # MAY_WRITE
+    # OPEN ATTEMPTS on sensitive paths — including DENIED ones.
+    # do_filp_open is the entry of every file open, BEFORE permission
+    # checks: a denied attempt still leaves the path and a negative
+    # return (ERR_PTR(-EACCES) = -13). Found by the owner's live test:
+    # `ls` on another user's home left no trace in the read/write hooks
+    # because the open fails before security_file_open fires. (The
+    # syscall-hook layer could not be used: tetragon v1.8.0 resolves
+    # __x64_openat, which no longer exists on kernel 6.17.)
+    - call: "do_filp_open"
+      syscall: false
+      return: true
+      data:
+        - index: 0
+          type: "int"
+          source: "current_task"
+          resolve: "cred.uid.val"
+      args:
+        - index: 1
+          type: "filename" # struct filename * -> the user-provided path
+      returnArg:
+        index: 0
+        type: "long" # struct file* or ERR_PTR(-errno) — negative = denied
+      selectors:
+        - matchData:
+            - index: 0
+              operator: "Equal"
+              values:
+                - "1001" # ai-muse
+          matchArgs:
+            - index: 1
+              operator: "Prefix"
+              values:
+                - "/root/"
+                - "/home/"
+                - "/etc/ssh/"
+                - "/etc/shadow"
+                - "/etc/sudoers"
