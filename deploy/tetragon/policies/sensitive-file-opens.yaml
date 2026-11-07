@@ -1,0 +1,22 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: sensitive-file-opens
+spec:
+  kprobes:
+    - call: security_file_open
+      syscall: false
+      selectors:
+        # Sensitive-path opens by any process — the T2 evidence
+        # (credential/secret reads). /home/ is broad on purpose for the
+        # PoC: it covers ~/.ssh, .env, and agent workspace files.
+        # Tune the noise after the first observation run.
+        - matchArgs:
+            - index: 0
+              operator: Prefix
+              values:
+                - /etc/shadow
+                - /etc/passwd
+                - /etc/ssh/
+                - /home/
+                - /root/

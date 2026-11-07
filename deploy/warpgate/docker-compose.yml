@@ -1,0 +1,10 @@
+services:
+  warpgate:
+    image: ghcr.io/warp-tech/warpgate:latest
+    container_name: warpgate
+    restart: unless-stopped
+    # Host networking: Warpgate binds the Tailscale IP directly and
+    # proxies SSH to the host sshd at 127.0.0.1:22.
+    network_mode: host
+    volumes:
+      - ${AZT_STATE_DIR:-/mnt/ssd2tb/agent-zerotrust/state}/warpgate:/data

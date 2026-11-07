@@ -1,0 +1,19 @@
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: outbound-connects
+spec:
+  kprobes:
+    - call: security_socket_connect
+      syscall: false
+      # No selectors in Phase 1: observe ALL outbound connection
+      # attempts (T4 evidence). Filter at the evidence pipeline; add
+      # selectors only after the first noise review.
+      #
+      # Example scoping later (verify arg index against the installed
+      # version — see tetragon.io/docs/getting-started/network):
+      # selectors:
+      #   - matchArgs:
+      #       - index: 0
+      #         operator: DPort
+      #         values: ["443", "22"]

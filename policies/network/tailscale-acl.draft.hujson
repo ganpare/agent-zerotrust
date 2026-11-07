@@ -1,0 +1,44 @@
+// DRAFT — review against the current tailnet ACL before applying.
+//
+// This file shows the TARGET rules for the agent path. It is NOT a
+// complete ACL policy: this tailnet has other devices and flows
+// (Synology, phones, other PCs) that must not break. Merge these rules
+// into the existing policy in the Tailscale admin console.
+//
+// Device tags (assign in the admin console or via
+// `tailscale up --advertise-tags=...`):
+//   tag:protected  → <PROTECTED_HOST> (the protected host)
+//   tag:agent-muse → the device Muse connects from
+//   tag:monitoring → evo Windows (the monitoring host)
+
+{
+  "tagOwners": {
+    "tag:protected": ["autogroup:admin"],
+    "tag:agent-muse": ["autogroup:admin"],
+    "tag:monitoring": ["autogroup:admin"]
+  },
+
+  "acls": [
+    // SR1 / threat T5: the acting agent may reach ONLY Warpgate's SSH
+    // port on the protected host. Direct sshd (22) is denied to it —
+    // no bypass, technically blocked rather than discouraged.
+    {
+      "action": "accept",
+      "src": ["tag:agent-muse"],
+      "dst": ["tag:protected:2222"]
+    },
+
+    // The monitoring host pulls evidence (dedicated collector identity)
+    // and holds the admin break-glass SSH path. Admins are trusted —
+    // threat model §2; their path runs through Warpgate's port too when
+    // possible, but direct 22 remains for break-glass.
+    {
+      "action": "accept",
+      "src": ["tag:monitoring"],
+      "dst": ["tag:protected:22", "tag:protected:2222"]
+    }
+
+    // Everything else for these tags: default deny.
+    // NOTE: preserve existing ACLs covering your other devices/flows.
+  ]
+}

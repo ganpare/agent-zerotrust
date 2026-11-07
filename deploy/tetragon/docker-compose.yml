@@ -1,0 +1,12 @@
+services:
+  tetragon:
+    image: quay.io/cilium/tetragon:v1.8.0
+    container_name: tetragon
+    restart: unless-stopped
+    # Privileged is REQUIRED to load and attach BPF programs (eBPF).
+    privileged: true
+    pid: host
+    cgroupns: host
+    volumes:
+      - /sys/kernel/btf/vmlinux:/var/lib/tetragon/btf:ro
+      - ./policies:/etc/tetragon/tetragon.tp.d:ro
