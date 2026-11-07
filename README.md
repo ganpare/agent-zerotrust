@@ -37,42 +37,88 @@ The premise is zero trust:
   optional layer that adds semantic analysis on top, and the floor keeps
   working when it is down.
 
-## Architecture (Phase 1 target)
+## Architecture
 
-```text
-                AI agents
-            ┌────┴─────────────┐
-           Muse            Claude Code / Codex   (future: local agents)
-            │
-     Tailscale ── path restriction: only the bastion is reachable
-            │
-     ┌──────┴──────┐
-     │   Warpgate  │  SSH bastion
-     │             │  · per-agent identity & auth
-     │             │  · full session recording & replay
-     └──────┬──────┘
-            │
-┌───────────┴─────────────────── protected host ───────────────────────┐
-│  Linux · `ai-muse` unprivileged user (GPU/CUDA available)             │
-│  Tetragon (eBPF) ─ kernel-level ground truth:                        │
-│      what was executed, which files were touched, where it connected  │
-└───────────┬──────────────────────────────────────────────────────────┘
-            │ one-way evidence stream (the agent cannot reach it)
-┌───────────┴─────────────────── monitoring host ───────────────────────┐
-│  evidence store (recordings + events)                                 │
-│  Guardian AI (optional) ─ semantic analysis, anomaly detection,       │
-│                          risk scoring                                 │
-│  IDS ─ notify now          IPS ─ block (Phase 3, via Tetragon          │
-│                               enforcement + network policy)            │
-└───────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph agents["AI Agents"]
+        muse["Muse<br/><i>remote, over SSH</i>"]
+        local["Claude Code / Codex<br/><i>future: local agents</i>"]
+    end
+
+    subgraph tailnet["Tailscale · path restriction"]
+        acl["ACL: agent → :22, :8930 only"]
+    end
+
+    subgraph bastion["Warpgate · SSH bastion"]
+        wg["per-agent identity & auth<br/>full session recording & replay"]
+    end
+
+    subgraph protected["Protected host · Linux"]
+        user["<code>ai-muse</code><br/>unprivileged · no sudo"]
+        tg["<b>Tetragon (eBPF)</b><br/>kernel-level ground truth<br/>exec · file · network"]
+        broker["<b>Privileged broker</b><br/>the only privileged door<br/>verifies signed leases"]
+    end
+
+    subgraph gateway["Gateway services"]
+        approvals["Approval service<br/>MCP + Telegram<br/>mints signed leases"]
+        watcher["Session watcher<br/>auto-review + briefing"]
+    end
+
+    subgraph monitoring["Monitoring host"]
+        store[("Evidence store<br/>recordings + events")]
+        guardian["Guardian AI <i>(optional)</i><br/>evidence vs claim<br/>risk scoring"]
+        ids["IDS · notify<br/>IPS · block"]
+    end
+
+    human(["Human owner<br/>Telegram · admin UI"])
+
+    muse -->|"ssh"| acl
+    local -.->|"future"| acl
+    acl -->|"only :22"| wg
+    wg -->|"as ai-muse"| user
+    user -->|"every syscall"| tg
+    user -->|"azt-broker"| broker
+    tg -->|"one-way evidence"| store
+    broker -->|"lease redemption"| store
+    store --> guardian
+    guardian --> ids
+    watcher --> guardian
+    watcher -->|"briefing"| human
+    approvals -->|"approval request"| human
+    human -->|"✅ / 🚫"| approvals
+    approvals -->|"signed lease"| broker
+    user -.->|"request_approval"| approvals
+    wg -.->|"recordings"| store
+
+    classDef agent fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    classDef bastionBox fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef hostBox fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef controlBox fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef monBox fill:#eceff1,stroke:#546e7a,stroke-width:2px
+    classDef humanBox fill:#fffde7,stroke:#fbc02d,stroke-width:2px
+
+    class muse,local agent
+    class acl,wg bastionBox
+    class user,tg,broker hostBox
+    class approvals,watcher controlBox
+    class store,guardian,ids monBox
+    class human humanBox
 ```
 
-The key Phase 1 problem is **correlation**: what the terminal shows is not
-what the kernel did. A single `python train.py` on the PTY can open a
-hundred files and call out to the internet. Warpgate tells you *what the
-agent typed*; Tetragon tells you *what actually happened*; correlating the
-two makes the session auditable. See
-[docs/architecture.md](docs/architecture.md).
+**The key problem is correlation**: what the terminal shows is not what
+the kernel did. A single `python train.py` on the PTY can open a hundred
+files and call out to the internet. Warpgate tells you *what the agent
+typed*; Tetragon tells you *what actually happened*; correlating the two
+makes the session auditable.
+
+**The approval loop** closes the other direction: a denied privileged
+operation carries a machine-readable denial ID → the agent requests
+approval via MCP → the human taps on Telegram → a signed, bounded lease
+is minted → the broker verifies and redeems it, executing exactly the
+bound action.
+
+See [docs/architecture.md](docs/architecture.md) for the full detail.
 
 ## Design principles
 

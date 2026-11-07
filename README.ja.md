@@ -38,42 +38,80 @@ Meta の
 - セキュリティの土台は**AIなしで**機能する — Guardian AI はその上に
   意味分析を追加するオプション層であり、それが落ちても土台は動き続ける
 
-## アーキテクチャ（Phase 1 目標）
+## アーキテクチャ
 
-```text
-                AI agents
-            ┌────┴─────────────┐
-           Muse            Claude Code / Codex   (future: local agents)
-            │
-     Tailscale ── path restriction: only the bastion is reachable
-            │
-     ┌──────┴──────┐
-     │   Warpgate  │  SSH bastion
-     │             │  · per-agent identity & auth
-     │             │  · full session recording & replay
-     └──────┬──────┘
-            │
-┌───────────┴─────────────────── protected host ───────────────────────┐
-│  Linux · `ai-muse` unprivileged user (GPU/CUDA available)             │
-│  Tetragon (eBPF) ─ kernel-level ground truth:                        │
-│      what was executed, which files were touched, where it connected  │
-└───────────┬──────────────────────────────────────────────────────────┘
-            │ one-way evidence stream (the agent cannot reach it)
-┌───────────┴─────────────────── monitoring host ───────────────────────┐
-│  evidence store (recordings + events)                                 │
-│  Guardian AI (optional) ─ semantic analysis, anomaly detection,       │
-│                          risk scoring                                 │
-│  IDS ─ notify now          IPS ─ block (Phase 3, via Tetragon          │
-│                               enforcement + network policy)            │
-└───────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph agents["AIエージェント"]
+        muse["Muse<br/><i>リモート・SSH経由</i>"]
+        local["Claude Code / Codex<br/><i>将来: ローカルエージェント</i>"]
+    end
+
+    subgraph tailnet["Tailscale · 経路制限"]
+        acl["ACL: エージェント → :22, :8930 のみ"]
+    end
+
+    subgraph bastion["Warpgate · SSH要塞"]
+        wg["エージェントごとの認証<br/>セッション録画・再生"]
+    end
+
+    subgraph protected["保護ホスト · Linux"]
+        user["<code>ai-muse</code><br/>非特権 · sudoなし"]
+        tg["<b>Tetragon (eBPF)</b><br/>カーネルレベルの事実<br/>実行 · ファイル · 通信"]
+        broker["<b>特権ブローカー</b><br/>唯一の特権ドア<br/>署名済みリースを検証"]
+    end
+
+    subgraph gateway["ゲートウェイサービス"]
+        approvals["承認サービス<br/>MCP + Telegram<br/>署名済みリースを鋳造"]
+        watcher["セッションウォッチャー<br/>自動レビュー + 通知"]
+    end
+
+    subgraph monitoring["監視ホスト"]
+        store[("証拠ストア<br/>録画 + イベント")]
+        guardian["Guardian AI <i>(オプション)</i><br/>証拠 vs 申告<br/>リスク評価"]
+        ids["IDS · 通知<br/>IPS · 遮断"]
+    end
+
+    human(["人間（オーナー）<br/>Telegram · 管理UI"])
+
+    muse -->|"ssh"| acl
+    local -.->|"将来"| acl
+    acl -->|"22番のみ"| wg
+    wg -->|"ai-muse として"| user
+    user -->|"全システムコール"| tg
+    user -->|"azt-broker"| broker
+    tg -->|"一方向の証拠"| store
+    broker -->|"リース償還"| store
+    store --> guardian
+    guardian --> ids
+    watcher --> guardian
+    watcher -->|"ブリーフィング"| human
+    approvals -->|"承認リクエスト"| human
+    human -->|"✅ / 🚫"| approvals
+    approvals -->|"署名済みリース"| broker
+    user -.->|"request_approval"| approvals
+    wg -.->|"録画"| store
+
+    classDef agent fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    classDef bastionBox fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef hostBox fill:#e8f5e9,stroke:#388e3c,stroke-width:2px
+    classDef controlBox fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef monBox fill:#eceff1,stroke:#546e7a,stroke-width:2px
+    classDef humanBox fill:#fffde7,stroke:#fbc02d,stroke-width:2px
+
+    class muse,local agent
+    class acl,wg bastionBox
+    class user,tg,broker hostBox
+    class approvals,watcher controlBox
+    class store,guardian,ids monBox
+    class human humanBox
 ```
 
-Phase 1 の鍵となる問題は**相関（correlation）**です。ターミナルに見えるものと、
-カーネルが実際にしたことは別物です。録画されたPTY上のたった一行の
-`python train.py` は、裏で百個のファイルを開き、インターネットへ通信しうる。
-Warpgate は*エージェントが打ったもの*を、Tetragon は*実際に起きたこと*を
-教えてくれます。この2つを紐付けて初めて、セッションは監査可能になります。
-詳しくは [docs/architecture.md](docs/architecture.md)。
+**核心となる問題は相関（correlation）**： ターミナルに見えるものと、カーネルが実際にしたことは別物です。録画されたPTY上のたった一行の `python train.py` は、裏で百個のファイルを開き、インターネットへ通信しうる。Warpgate は*エージェントが打ったもの*を、Tetragon は*実際に起きたこと*を教えてくれます。この2つを紐付けて初めて、セッションは監査可能になります。
+
+**承認ループ**は逆方向を閉じます： 拒否された特権操作は機械可読な拒否IDを伴い → エージェントがMCPで承認を要求し → 人間がTelegramでタップし → 署名済みの期限付きリースが鋳造され → ブローカーが検証・償還して、束縛された操作だけを実行します。
+
+詳細は [docs/architecture.md](docs/architecture.md) を参照してください。
 
 ## 設計原則
 
