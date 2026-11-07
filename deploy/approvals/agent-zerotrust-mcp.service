@@ -8,8 +8,8 @@ User=sungo
 WorkingDirectory=/mnt/ssd2tb/projects/Zero-trust
 ExecStart=/usr/bin/python3 -u -m approvals.mcp_server
 Environment=APPROVAL_PORT=8930
-Environment=WARGATE_URL=https://<PROTECTED_HOST_IP>:8888
-Environment=APPROVAL_BIND=<PROTECTED_HOST_IP>
+Environment=WARGATE_URL=https://127.0.0.1:8888
+Environment=APPROVAL_BIND=0.0.0.0
 Restart=on-failure
 RestartSec=10
 

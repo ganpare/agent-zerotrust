@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""azt-worker — installed CLI wrapper for SSH sessions."""
+import sys
+sys.path.insert(0, "/mnt/ssd2tb/projects/Zero-trust")
+from workers.client import main
+raise SystemExit(main())

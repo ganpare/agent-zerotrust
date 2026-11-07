@@ -48,7 +48,6 @@ ALLOWED_LINUX_ROOTS = (
     "/mnt/ssd2tb/projects",
     "/mnt/hdd22",
     "/mnt/hdd",
-    "/mnt/Win-",
     "/home/sungo",
     "/tmp",
 )
@@ -156,7 +155,7 @@ def wrap_prompt(instruction: str, target: str, workdir: str) -> str:
     )
     if target == "windows":
         win_header = (
-            "TARGET ENVIRONMENT: Windows host (<MONITORING_HOST>) with GPU access.\n"
+            "TARGET ENVIRONMENT: Windows host with GPU access.\n"
             "- ALWAYS execute commands on Windows via: `ssh windows \"<command>\"` (uses SSH for all file/OS interaction).\n"
             "- NEVER access Windows files directly via mounts.\n"
             "- Report clearly what commands you ran on Windows and their output.\n\n"

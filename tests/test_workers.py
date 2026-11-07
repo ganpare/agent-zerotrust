@@ -37,7 +37,7 @@ class WorkerGatewayTest(unittest.TestCase):
     def test_wrap_prompt_windows_injects_ssh_windows_context(self):
         prompt = gateway.wrap_prompt("Check nvidia-smi", "windows", "/tmp")
         self.assertIn("ssh windows", prompt)
-        self.assertIn("/mnt/Win-", prompt)
+        self.assertIn("NEVER access Windows files directly via mounts", prompt)
         self.assertIn("Check nvidia-smi", prompt)
 
     def test_build_agent_command_variants(self):
