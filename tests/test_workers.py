@@ -169,6 +169,27 @@ class AgentRegistryTest(unittest.TestCase):
         self.assertEqual(res["status"], "rejected")
         self.assertIn("owner", res["reason"])
 
+    def test_default_model_is_written(self):
+        res = self.registry.create_agent("defaulted", "d", "p")
+        self.assertEqual(res["status"], "created")
+        self.assertEqual(res["model"], "opencode/deepseek-v4.1-flash-free")
+        text = (self.registry.AGENT_DIR / "muse-defaulted.md").read_text()
+        self.assertIn("model: opencode/deepseek-v4.1-flash-free", text)
+
+    def test_allowed_model_is_written(self):
+        res = self.registry.create_agent(
+            "mistraled", "d", "p", model="mistral/deepseek-v4-1-flash-1017")
+        self.assertEqual(res["status"], "created")
+        text = (self.registry.AGENT_DIR / "muse-mistraled.md").read_text()
+        self.assertIn("model: mistral/deepseek-v4-1-flash-1017", text)
+
+    def test_disallowed_model_is_rejected(self):
+        res = self.registry.create_agent(
+            "expensive", "d", "p", model="opencode/claude-opus-5-5")
+        self.assertEqual(res["status"], "rejected")
+        self.assertIn("not allowed", res["reason"])
+        self.assertFalse((self.registry.AGENT_DIR / "muse-expensive.md").exists())
+
     def test_risky_prompt_needs_approval(self):
         self.registry.jev_audit.classify = lambda text, timeout=15: {
             "category": "secrets", "confidence": 1.0, "probabilities": {},

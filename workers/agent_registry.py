@@ -41,6 +41,17 @@ NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 
 MAX_AGENTS = int(os.environ.get("AZT_MAX_WORKER_AGENTS", "20"))
 
+# Only these models may be chosen for a gateway-created agent. The first is
+# the default when none is given. Extend through AZT_ALLOWED_MODELS
+# (comma-separated) rather than editing the code.
+DEFAULT_MODEL = "opencode/deepseek-v4.1-flash-free"
+ALLOWED_MODELS = tuple(
+    m.strip() for m in os.environ.get(
+        "AZT_ALLOWED_MODELS",
+        "opencode/deepseek-v4.1-flash-free,mistral/deepseek-v4-1-flash-1017",
+    ).split(",") if m.strip()
+)
+
 CREATOR = "muse"
 
 
@@ -99,6 +110,12 @@ def create_agent(
         return {"status": "rejected",
                 "reason": "mode must be primary, subagent, or all"}
 
+    chosen_model = model or DEFAULT_MODEL
+    if chosen_model not in ALLOWED_MODELS:
+        return {"status": "rejected",
+                "reason": f"model {chosen_model!r} is not allowed; choose one "
+                          f"of: {', '.join(ALLOWED_MODELS)}"}
+
     if not _owned_by_gateway(path):
         return {"status": "rejected",
                 "reason": "this agent was created by the owner and cannot be "
@@ -131,8 +148,7 @@ def create_agent(
         f"description: {json.dumps(description, ensure_ascii=False)}",
         f"mode: {mode}",
     ]
-    if model:
-        front.append(f"model: {model}")
+    front.append(f"model: {chosen_model}")
     front += [
         f"created-by: {CREATOR}",
         f"created-at: {time.strftime('%Y-%m-%dT%H:%M:%S%z')}",
@@ -152,7 +168,7 @@ def create_agent(
         "path": str(path),
         "description": description,
         "mode": mode,
-        "model": model,
+        "model": chosen_model,
         "prompt": prompt,
         "audit_category": audit["category"],
         "audit_confidence": audit["confidence"],
@@ -160,6 +176,7 @@ def create_agent(
     }
     _append(record)
     return {"status": "created", "name": path.stem, "path": str(path),
+            "model": chosen_model,
             "audit_category": audit["category"],
             "audit_confidence": audit["confidence"]}
 

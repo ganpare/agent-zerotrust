@@ -283,6 +283,12 @@ first:
 | the prompt is classified by Jev | a definition asking for keys or a monitoring stop goes to the owner on Telegram |
 | the file was not written by the owner | an agent the owner wrote is never overwritten |
 | fewer than 20 gateway-created agents exist | the directory cannot be filled up |
+| the model is on the allowlist | the agent cannot pick an expensive model |
+
+Two models are allowed by default, `opencode/deepseek-v4.1-flash-free`
+(written when none is given) and `mistral/deepseek-v4-1-flash-1017`.
+Extend the list with `AZT_ALLOWED_MODELS` (comma-separated) instead of
+editing the code.
 
 There is no delete tool: an agent the agent created stays. Every creation
 is appended to `agents.jsonl` in the evidence store.
