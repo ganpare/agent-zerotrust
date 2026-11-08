@@ -72,7 +72,7 @@ class WorkerGatewayTest(unittest.TestCase):
 
     def test_dispatch_and_complete_short_task(self):
         # A real agent answers the task; /bin/echo would echo the harness
-        # prompt (which mentions secrets) and trip the output auditor.
+        # prompt (which mentions secrets) and trip the output classifier.
         with mock.patch.object(gateway, "discover_agents",
                                return_value={"agy": "/bin/true"}), \
              mock.patch.object(gateway, "_notify_telegram") as notify:

@@ -125,6 +125,18 @@ flowchart TB
 
 **The worker gateway** extends the agent's reach without giving it credentials: the agent asks the MCP Gateway to *dispatch a task* to a local CLI agent (codex, dsh, opencode, commandcode, vibe, agy). The worker runs under the owner's environment, and Windows work is reached through `ssh windows` — never through mounts or extra Windows users. Every dispatch is safety-screened, audited, and briefed to Telegram.
 
+**The audit gate** sits between the gateway and the worker. Each request is classified by [Jev](https://docs.typesafe.ai) (TypeSafe's System One model — a typed `Choice` question answered in 150–300 ms, with no text generation, so no ideological drift):
+
+| Category | Action |
+|---|---|
+| ordinary work | run |
+| NSFW content | run |
+| secrets (keys, tokens, `.env`) | **ask the owner on Telegram** |
+| monitoring (stops or tampers with it) | **ask the owner on Telegram** |
+| destructive operations | **ask the owner on Telegram** |
+
+A deterministic pattern screen runs first and can only *raise* the category, never lower it. Requests that need approval wait for a Telegram button tap and fail closed after ten minutes. Worker output is classified again before it returns, so a secret that leaks into a result is withheld (the full text stays in the evidence store). Every notification shows the delegating node, the category, and the confidence.
+
 **Current IDS/IPS posture**: IDS is live (session review + Telegram briefings). IPS is enforced as *allow-by-default at the OS boundary* (no sudo for `ai-muse`, broker-mediated privileged ops, network observed but not default-denied). Default-deny egress and Tetragon enforcement remain Phase 3 follow-ups.
 
 See [docs/architecture.md](docs/architecture.md) for the full detail.
