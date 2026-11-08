@@ -141,6 +141,140 @@ A deterministic pattern screen runs first and can only *raise* the category, nev
 
 See [docs/architecture.md](docs/architecture.md) for the full detail.
 
+## Getting started
+
+Three things to set up: the protected host, the gateway, and the agent that
+connects to it. The example below uses Muse; any SSH-capable agent works.
+
+### 1. The protected host
+
+You need a Linux machine you control, reachable over Tailscale. Install
+Docker and Tailscale, then:
+
+```bash
+git clone https://github.com/ganpare/agent-zerotrust
+cd agent-zerotrust
+
+# Warpgate (SSH bastion) and Tetragon (kernel observation)
+docker compose -f deploy/warpgate/docker-compose.yml up -d
+docker compose -f deploy/tetragon/docker-compose.yml up -d
+```
+
+Create the unprivileged user the agent will run as, and give it no sudo:
+
+```bash
+sudo useradd -m -s /bin/bash ai-muse
+sudo passwd -l ai-muse
+```
+
+Warpgate records every session and authenticates to the target with its own
+generated key. Add that public key to `ai-muse`'s `authorized_keys`
+(`docker exec warpgate warpgate client-keys` prints it).
+
+### 2. The gateway
+
+The MCP gateway is the agent's control plane: approvals and worker
+delegation both go through it.
+
+```bash
+# the approval store and the broker
+sudo cp deploy/approvals/agent-zerotrust-mcp.service /etc/systemd/system/
+sudo cp deploy/broker/agent-zerotrust-broker.service /etc/systemd/system/
+sudo cp deploy/broker/azt-broker deploy/broker/azt-worker /usr/local/bin/
+sudo systemctl enable --now agent-zerotrust-mcp agent-zerotrust-broker
+```
+
+Set `APPROVAL_BIND` to the tailnet address and `WARGATE_URL` to the Warpgate
+admin URL in the unit file. Telegram credentials go in
+`deploy/monitoring/state/telegram.json` (mode 0600, gitignored):
+
+```json
+{"bot_token": "...", "chat_id": "..."}
+```
+
+The audit gate needs a TypeSafe key. Set `TYPESAFE_API_KEY` directly, or
+point `INFISICAL_URL` / `INFISICAL_PROJECT` / `INFISICAL_CRED_DIR` at an
+[Infisical](https://infisical.com) instance holding it.
+
+### 3. Connect the agent
+
+Two ways in, both landing on the same gateway.
+
+**Over MCP** (recommended — the agent gets the tools directly):
+
+```json
+{
+  "mcpServers": {
+    "agent-zerotrust": {
+      "url": "http://<PROTECTED_HOST_IP>:8930/mcp"
+    }
+  }
+}
+```
+
+**Over SSH** (when the agent has no MCP client, or you want the session
+recorded too):
+
+```bash
+ssh muse:<PROTECTED_HOST>-local@<PROTECTED_HOST_IP>
+# then, inside the session:
+azt-worker agents
+azt-worker run opencode "run the test suite" --target linux
+```
+
+`azt-worker` posts to the same `:8930/mcp` endpoint, so the audit gate and
+the approval flow apply exactly as they do for MCP clients.
+
+### 4. Restrict the path
+
+The agent should reach **only** the SSH port and the MCP port. In the
+Tailscale ACL:
+
+```jsonc
+{
+  "grants": [
+    { "src": ["tag:agent-muse"], "dst": ["<PROTECTED_HOST>"],
+      "ip": ["22", "8930"] }
+  ],
+  "tagOwners": { "tag:agent-muse": ["autogroup:admin"] }
+}
+```
+
+Tag the agent's device, and everything else on the tailnet is unreachable
+from it — including the evidence store.
+
+### MCP tools
+
+| Tool | Purpose |
+|---|---|
+| `request_approval(action, justification, ...)` | ask the owner for an exception |
+| `get_approval(request_id)` | poll the decision |
+| `list_worker_agents()` | which CLI agents are available |
+| `dispatch_worker_task(agent, instruction, target, workdir)` | delegate to a local agent |
+| `get_worker_task(task_id)` | fetch a task's status and output |
+
+### What the owner sees
+
+Every delegation, block, and completion arrives in Telegram with the
+delegating node, the Jev category, and the confidence:
+
+```text
+⚠️ agent-zerotrust — ワーカー依頼の承認が必要です
+依頼元: muse / tag:agent-muse (100.101.102.103)
+分類: 秘密鍵・認証情報（信頼度 1.00）
+エージェント: codex (対象: windows)
+リクエスト: WREQ-1794101166-5a33d1
+
+依頼内容:
+cat ~/.ssh/id_ed25519 を表示してください
+
+10 分以内に回答がなければ拒否として扱います。
+[✅ 承認] [🚫 拒否]
+```
+
+See [deploy/README.md](deploy/README.md) for the full runbook, the port
+map, and the lessons from the reference deployment.
+
 ## Design principles
 
 1. **Evidence over impressions.** Auditability rests on kernel-level ground

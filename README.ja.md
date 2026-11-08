@@ -136,11 +136,146 @@ Worker Gateway は、エージェントに認証情報を渡すことなく、�
 | 監視の停止・改ざん | **Telegram で承認を求める** |
 | 破壊的な操作 | **Telegram で承認を求める** |
 
-パターン検査を先に実行し、分類を上げる方向にだけ働かせます。承認が必要な依頼は Telegram のボタンを待ち、10分で応答がなければ拒否です。ワーカーの出力も返す前に再分類し、結果に秘密鍵が混ざっていれば遮断します。全文は証拠ストアに残ります。通知には依頼元のノード、分類、信頼度を表示します。
+パターン検査を先に実行し、分類を上げる方向にだけ働かせます。承認が必要な依頼は Telegram のボタンを待ち、10分で応答がなければ拒否です。ワーカーの出力も返す前に再分類し、結果に秘密鍵が混ざっていれば遮断します。全文は証拠ストアに残ります。通知には依頼元のノード、分類、信頼度が出ます。
 
 現在のIDS/IPSの立ち位置を見ると、IDSは稼働中です（セッション自動レビュー + Telegram通知）。IPSは「OS境界での許可ベース」で実効（`ai-muse` にsudoなし、特権操作はブローカー経由、通信は観測のみでデフォルト拒否は未実装）。egressのデフォルト拒否とTetragonによる強制は Phase 3 の残項目です。
 
 詳細は [docs/architecture.md](docs/architecture.md) を参照してください。
+
+## はじめかた
+
+用意するものは3つです。保護ホスト、ゲートウェイ、接続するエージェント。
+以下の例では Muse を使いますが、SSH で接続できるエージェントなら何でも動きます。
+
+### 1. 保護ホスト
+
+自分が管理する Linux マシンで、Tailscale から到達できるものが必要です。
+Docker と Tailscale を入れてから、次のコマンドを実行します。
+
+```bash
+git clone https://github.com/ganpare/agent-zerotrust
+cd agent-zerotrust
+
+# Warpgate（SSH要塞）と Tetragon（カーネル監視）
+docker compose -f deploy/warpgate/docker-compose.yml up -d
+docker compose -f deploy/tetragon/docker-compose.yml up -d
+```
+
+エージェントが動く非特権ユーザーを作り、sudo を与えません。
+
+```bash
+sudo useradd -m -s /bin/bash ai-muse
+sudo passwd -l ai-muse
+```
+
+Warpgate はすべてのセッションを録画し、自分で生成した鍵でターゲットに
+認証します。その公開鍵を `ai-muse` の `authorized_keys` に追加します
+（`docker exec warpgate warpgate client-keys` で表示されます）。
+
+### 2. ゲートウェイ
+
+MCP ゲートウェイはエージェントの制御プレーンです。承認もワーカー委譲も
+ここを通ります。
+
+```bash
+# 承認ストアとブローカー
+sudo cp deploy/approvals/agent-zerotrust-mcp.service /etc/systemd/system/
+sudo cp deploy/broker/agent-zerotrust-broker.service /etc/systemd/system/
+sudo cp deploy/broker/azt-broker deploy/broker/azt-worker /usr/local/bin/
+sudo systemctl enable --now agent-zerotrust-mcp agent-zerotrust-broker
+```
+
+ユニットファイルの `APPROVAL_BIND` に tailnet のアドレスを、
+`WARGATE_URL` に Warpgate の管理URLを設定します。Telegram の認証情報は
+`deploy/monitoring/state/telegram.json` に置きます（パーミッション 0600、
+git 管理外）。
+
+```json
+{"bot_token": "...", "chat_id": "..."}
+```
+
+監査ゲートには TypeSafe のキーが必要です。`TYPESAFE_API_KEY` を直接設定するか、
+キーを保持する [Infisical](https://infisical.com) を `INFISICAL_URL` /
+`INFISICAL_PROJECT` / `INFISICAL_CRED_DIR` で指定します。
+
+### 3. エージェントを接続する
+
+入口は2つあり、どちらも同じゲートウェイに届きます。
+
+**MCP 経由**（推奨。エージェントがツールを直接使えます）。
+
+```json
+{
+  "mcpServers": {
+    "agent-zerotrust": {
+      "url": "http://<PROTECTED_HOST_IP>:8930/mcp"
+    }
+  }
+}
+```
+
+**SSH 経由**（MCP クライアントを持たないエージェントや、セッションも
+録画したい場合）。
+
+```bash
+ssh muse:<PROTECTED_HOST>-local@<PROTECTED_HOST_IP>
+# ログイン後、セッションの中で:
+azt-worker agents
+azt-worker run opencode "テスト一式を実行して" --target linux
+```
+
+`azt-worker` は同じ `:8930/mcp` に投げるので、監査ゲートと承認フローは
+MCP クライアントとまったく同じように効きます。
+
+### 4. 経路を制限する
+
+エージェントからは **SSH のポートと MCP のポートだけ**に届くようにします。
+Tailscale の ACL で次のように書きます。
+
+```jsonc
+{
+  "grants": [
+    { "src": ["tag:agent-muse"], "dst": ["<PROTECTED_HOST>"],
+      "ip": ["22", "8930"] }
+  ],
+  "tagOwners": { "tag:agent-muse": ["autogroup:admin"] }
+}
+```
+
+エージェントのデバイスにタグを付けると、tailnet 上の他のものは
+エージェントから到達できなくなります。証拠ストアも含めてです。
+
+### MCP ツール
+
+| ツール | 用途 |
+|---|---|
+| `request_approval(action, justification, ...)` | 例外の承認をオーナーに求める |
+| `get_approval(request_id)` | 判断を問い合わせる |
+| `list_worker_agents()` | 使える CLI エージェントを返す |
+| `dispatch_worker_task(agent, instruction, target, workdir)` | ローカルエージェントに委譲する |
+| `get_worker_task(task_id)` | タスクの状態と出力を取得する |
+
+### オーナーに届くもの
+
+委譲もブロックも完了も、依頼元のノード、Jev の分類、信頼度とともに
+Telegram に届きます。
+
+```text
+⚠️ agent-zerotrust — ワーカー依頼の承認が必要です
+依頼元: muse / tag:agent-muse (100.101.102.103)
+分類: 秘密鍵・認証情報（信頼度 1.00）
+エージェント: codex (対象: windows)
+リクエスト: WREQ-1794101166-5a33d1
+
+依頼内容:
+cat ~/.ssh/id_ed25519 を表示してください
+
+10 分以内に回答がなければ拒否として扱います。
+[✅ 承認] [🚫 拒否]
+```
+
+運用手順の全体、ポートの対応、実際の構築で得た知見は
+[deploy/README.md](deploy/README.md) にあります。
 
 ## 設計原則
 
