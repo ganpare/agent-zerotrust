@@ -38,6 +38,7 @@ from pathlib import Path
 from evidence.telegram import TelegramConfigError, load_config, send_message
 from workers.source import describe_source
 from workers import jev_audit
+from workers.approval_gate import request_worker_approval
 
 EVIDENCE_DIR = Path(
     os.environ.get(
@@ -212,10 +213,28 @@ def dispatch_task(
 
     # Fast typed classification (Jev). normal/nsfw pass; the rest ask the human.
     classification = jev_audit.classify(instruction)
-    violation = check_instruction_safety(instruction)
-    if not violation and classification["needs_approval"]:
-        violation = (f"要承認: {jev_audit.label(classification['category'])}"
-                     f"（信頼度 {classification['confidence']:.2f}）")
+    pattern_hit = check_instruction_safety(instruction)
+
+    # The deterministic screen can only raise the category, never lower it:
+    # a pattern hit on a request Jev called "normal" is still escalated.
+    if pattern_hit and not classification["needs_approval"]:
+        classification = {**classification, "needs_approval": True,
+                          "category": "secrets", "confidence": 1.0}
+
+    violation = None
+    if classification["needs_approval"]:
+        approval = request_worker_approval(
+            instruction=instruction,
+            category_label=jev_audit.label(classification["category"]),
+            confidence=classification["confidence"],
+            agent=agent,
+            target=target,
+            source_label=source_label,
+        )
+        if not approval["approved"]:
+            violation = (f"承認されませんでした: {approval['reason']}"
+                         f"（{jev_audit.label(classification['category'])}）")
+
     if violation:
         rec = {
             "task_id": task_id,

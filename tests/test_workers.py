@@ -12,6 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from workers import gateway  # noqa: E402
 
 
+# never let a test block on a human answer
+gateway.request_worker_approval = lambda **kw: {
+    "approved": False, "request_id": "test", "reason": "test"
+}
+
+
 class WorkerGatewayTest(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
