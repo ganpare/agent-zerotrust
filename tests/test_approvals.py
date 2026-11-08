@@ -102,6 +102,8 @@ class McpDispatchTest(unittest.TestCase):
                 "list_worker_agents",
                 "dispatch_worker_task",
                 "get_worker_task",
+                "create_worker_agent",
+                "list_worker_agents_defined",
             },
         )
         for tool in result["tools"]:

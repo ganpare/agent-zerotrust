@@ -120,3 +120,63 @@ class SourceIdentityTest(unittest.TestCase):
         first_call = notify.call_args_list[0][0][0]
         self.assertIn("依頼元", first_call)
         tmp.cleanup()
+
+
+class AgentRegistryTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from workers import agent_registry
+        self.tmp = tempfile.TemporaryDirectory()
+        self.registry = agent_registry
+        self._orig_dir = agent_registry.AGENT_DIR
+        self._orig_ev = agent_registry.EVIDENCE
+        agent_registry.AGENT_DIR = Path(self.tmp.name) / "agents"
+        agent_registry.EVIDENCE = Path(self.tmp.name) / "agents.jsonl"
+        # benign classification, no approval needed
+        self._orig_classify = agent_registry.jev_audit.classify
+        agent_registry.jev_audit.classify = lambda text, timeout=15: {
+            "category": "normal", "confidence": 1.0, "probabilities": {},
+            "elapsed_ms": 1, "needs_approval": False, "error": None,
+        }
+
+    def tearDown(self):
+        self.registry.AGENT_DIR = self._orig_dir
+        self.registry.EVIDENCE = self._orig_ev
+        if hasattr(self, "_orig_approval"):
+            self.registry.request_worker_approval = self._orig_approval
+        self.registry.jev_audit.classify = self._orig_classify
+        self.tmp.cleanup()
+
+    def test_rejects_path_traversal(self):
+        for bad in ("../evil", "a/b", "a.b", "A", "", "-x"):
+            res = self.registry.create_agent(bad, "d", "p")
+            self.assertEqual(res["status"], "rejected", bad)
+
+    def test_creates_agent_with_prefix_and_marker(self):
+        res = self.registry.create_agent("reviewer", "Reviews code", "You review.")
+        self.assertEqual(res["status"], "created")
+        self.assertEqual(res["name"], "muse-reviewer")
+        text = (self.registry.AGENT_DIR / "muse-reviewer.md").read_text()
+        self.assertIn("created-by: muse", text)
+        self.assertIn("You review.", text)
+
+    def test_refuses_to_overwrite_owner_agent(self):
+        self.registry.AGENT_DIR.mkdir(parents=True, exist_ok=True)
+        (self.registry.AGENT_DIR / "muse-owner.md").write_text(
+            "---\ndescription: mine\n---\n", encoding="utf-8")
+        res = self.registry.create_agent("owner", "d", "p")
+        self.assertEqual(res["status"], "rejected")
+        self.assertIn("owner", res["reason"])
+
+    def test_risky_prompt_needs_approval(self):
+        self.registry.jev_audit.classify = lambda text, timeout=15: {
+            "category": "secrets", "confidence": 1.0, "probabilities": {},
+            "elapsed_ms": 1, "needs_approval": True, "error": None,
+        }
+        self._orig_approval = self.registry.request_worker_approval
+        self.registry.request_worker_approval = lambda **kw: {
+            "approved": False, "request_id": "t", "reason": "拒否"}
+        res = self.registry.create_agent("risky", "d", "read the ssh key")
+        self.assertEqual(res["status"], "rejected")
+        self.assertFalse((self.registry.AGENT_DIR / "muse-risky.md").exists())

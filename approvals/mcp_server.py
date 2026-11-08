@@ -29,6 +29,7 @@ from . import service, store
 from evidence.telegram import (TelegramConfigError, answer_callback,
                                edit_message, get_updates, load_config)
 from workers import gateway as worker_gateway
+from workers import agent_registry
 
 REPO = __import__("pathlib").Path(__file__).resolve().parents[1]
 PROTOCOL_VERSION = "2025-06-18"
@@ -137,6 +138,50 @@ TOOLS = [
             "required": ["task_id"],
         },
     },
+    {
+        "name": "create_worker_agent",
+        "description": (
+            "Define a reusable OpenCode agent. The definition is audited and, "
+            "when the prompt looks risky, sent to the owner on Telegram for "
+            "approval before it is written. Agents created this way cannot be "
+            "deleted through this interface."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "lowercase letters, digits, hyphens (1-41 chars)",
+                },
+                "description": {
+                    "type": "string",
+                    "description": "what this agent is for",
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "the agent's system prompt",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "optional provider/model",
+                },
+                "mode": {
+                    "type": "string",
+                    "description": "primary | subagent | all (default subagent)",
+                },
+            },
+            "required": ["name", "description", "prompt"],
+        },
+    },
+    {
+        "name": "list_worker_agents_defined",
+        "description": "List the OpenCode agents this gateway created.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
 ]
 
 
@@ -227,6 +272,29 @@ def dispatch(method: str, params: dict, env: dict,
             if view is None:
                 return _tool_result({"task_id": tid, "status": "unknown"}), 200
             return _tool_result(view), 200
+        if name == "create_worker_agent":
+            agent_name = str(args.get("name", "")).strip()
+            description = str(args.get("description", "")).strip()
+            prompt = str(args.get("prompt", "")).strip()
+            if not agent_name or not description or not prompt:
+                return _error_result(
+                    "name, description and prompt are required"), 200
+            model = str(args.get("model", "")).strip()
+            mode = str(args.get("mode", "subagent")).strip() or "subagent"
+            try:
+                view = agent_registry.create_agent(
+                    name=agent_name,
+                    description=description,
+                    prompt=prompt,
+                    model=model,
+                    mode=mode,
+                    source_ip=source_ip,
+                )
+            except ValueError as exc:
+                return _error_result(str(exc)), 200
+            return _tool_result(view), 200
+        if name == "list_worker_agents_defined":
+            return _tool_result({"agents": agent_registry.list_agents()}), 200
         return _error_result(f"unknown tool: {name}"), 200
     return None, 404
 

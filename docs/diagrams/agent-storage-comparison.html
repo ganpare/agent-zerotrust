@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>エージェント定義の保存先 — A案 vs B案</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card-hover: #22262f;
+    --border: #2d323e;
+    --text: #e4e6eb;
+    --muted: #8b92a3;
+    --accent-a: #f59e0b;
+    --accent-b: #10b981;
+    --danger: #ef4444;
+    --ok: #22c55e;
+    --code-bg: #12141a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+  }
+  .subtitle { color: var(--muted); font-size: 15px; margin-bottom: 40px; }
+
+  .question {
+    background: var(--card);
+    border-left: 4px solid #6366f1;
+    padding: 20px 24px;
+    border-radius: 8px;
+    margin-bottom: 40px;
+  }
+  .question strong { color: #a5b4fc; }
+
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 40px;
+  }
+  @media (max-width: 900px) { .compare { grid-template-columns: 1fr; } }
+
+  .plan {
+    background: var(--card);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .plan-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .plan-a .plan-header { background: rgba(245, 158, 11, 0.08); }
+  .plan-b .plan-header { background: rgba(16, 185, 129, 0.08); }
+  .badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+  }
+  .plan-a .badge { background: var(--accent-a); color: #1a1d27; }
+  .plan-b .badge { background: var(--accent-b); color: #1a1d27; }
+  .plan-title { font-size: 17px; font-weight: 600; }
+  .plan-body { padding: 24px; }
+
+  .diagram {
+    background: var(--code-bg);
+    border-radius: 8px;
+    padding: 20px;
+    font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    font-size: 13px;
+    line-height: 1.9;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .diagram .box { color: #93c5fd; }
+  .diagram .arrow { color: #6b7280; }
+  .diagram .file { color: #fbbf24; }
+  .diagram .note { color: #6b7280; font-style: italic; }
+  .diagram .danger { color: var(--danger); }
+  .diagram .safe { color: var(--ok); }
+
+  .pros-cons { display: grid; gap: 16px; }
+  .pros, .cons {
+    padding: 14px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .pros { background: rgba(34, 197, 94, 0.08); border-left: 3px solid var(--ok); }
+  .cons { background: rgba(239, 68, 68, 0.08); border-left: 3px solid var(--danger); }
+  .pros h4, .cons h4 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    opacity: 0.8;
+  }
+  .pros h4 { color: var(--ok); }
+  .cons h4 { color: var(--danger); }
+  .pros ul, .cons ul { list-style: none; }
+  .pros li, .cons li { padding: 3px 0 3px 20px; position: relative; }
+  .pros li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
+  .cons li::before { content: "✗"; position: absolute; left: 0; color: var(--danger); font-weight: 700; }
+
+  .section-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 48px 0 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--code-bg); font-weight: 600; font-size: 13px; color: var(--muted); }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 600; }
+  .win { color: var(--ok); font-weight: 700; }
+  .lose { color: var(--danger); }
+  .neutral { color: var(--muted); }
+
+  .verdict {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.04));
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-top: 40px;
+  }
+  .verdict h3 { font-size: 18px; margin-bottom: 14px; color: var(--accent-b); }
+  .verdict p { margin-bottom: 12px; font-size: 15px; }
+  .verdict code {
+    background: var(--code-bg);
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: "SF Mono", "Menlo", monospace;
+    font-size: 13px;
+    color: #fbbf24;
+  }
+
+  .key-point {
+    background: rgba(99, 102, 241, 0.1);
+    border-left: 4px solid #6366f1;
+    padding: 16px 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+  .key-point strong { color: #a5b4fc; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>エージェント定義の保存先</h1>
+  <p class="subtitle">A案（OpenCode の設定領域）vs B案（ゲートウェイ管理）— どちらが安全か</p>
+
+  <div class="question">
+    <strong>やりたいこと：</strong> Muse が MCP 経由でエージェントを定義し、そのエージェントにタスクを委譲する。
+    定義したエージェントは削除できない（残り続ける）。<br>
+    <strong>問題：</strong> その定義ファイルをどこに置くか。
+  </div>
+
+  <div class="compare">
+
+    <!-- A案 -->
+    <div class="plan plan-a">
+      <div class="plan-header">
+        <span class="badge">A案</span>
+        <span class="plan-title">OpenCode の設定領域に書く</span>
+      </div>
+      <div class="plan-body">
+        <div class="diagram"><span class="box">Muse</span>
+  <span class="arrow">│</span> MCP: create_worker_agent()
+  <span class="arrow">▼</span>
+<span class="box">MCP Gateway</span>
+  <span class="arrow">│</span> ファイルを書き込む
+  <span class="arrow">▼</span>
+<span class="file">~/.config/opencode/agents/muse-xxx.jsonc</span>
+  <span class="note">↑ sungo の設定ディレクトリの中</span>
+  <span class="arrow">│</span>
+  <span class="arrow">▼</span>
+<span class="box">OpenCode</span>
+  <span class="arrow">│</span> --agent muse-xxx で読み込む
+  <span class="arrow">▼</span>
+<span class="box">実行</span></div>
+
+        <div class="pros-cons">
+          <div class="pros">
+            <h4>長所</h4>
+            <ul>
+              <li>OpenCode の <code>--agent</code> 機能がそのまま使える</li>
+              <li>実装が単純（ファイルを書くだけ）</li>
+              <li>人間が後から手で編集できる</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>短所</h4>
+            <ul>
+              <li><strong>Muse が sungo の設定領域に書き込める</strong></li>
+              <li>パストラバーサルで他の設定を壊せる</li>
+              <li>人間の設定と混ざる（管理が煩雑）</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- B案 -->
+    <div class="plan plan-b">
+      <div class="plan-header">
+        <span class="badge">B案</span>
+        <span class="plan-title">ゲートウェイが管理する</span>
+      </div>
+      <div class="plan-body">
+        <div class="diagram"><span class="box">Muse</span>
+  <span class="arrow">│</span> MCP: create_worker_agent()
+  <span class="arrow">▼</span>
+<span class="box">MCP Gateway</span>
+  <span class="arrow">│</span> 専用領域に保存
+  <span class="arrow">▼</span>
+<span class="file">/mnt/hdd22/agent-zerotrust/agents/</span>
+  <span class="note">↑ ゲートウェイ専用（sungo の設定と無関係）</span>
+  <span class="arrow">│</span>
+  <span class="arrow">▼</span>
+<span class="box">dispatch_worker_task()</span>
+  <span class="arrow">│</span> プロンプトを instruction に前置き
+  <span class="arrow">▼</span>
+<span class="box">OpenCode</span>
+  <span class="arrow">│</span> 通常の実行
+  <span class="arrow">▼</span>
+<span class="box">実行</span></div>
+
+        <div class="pros-cons">
+          <div class="pros">
+            <h4>長所</h4>
+            <ul>
+              <li><strong>sungo の設定に一切触れない</strong></li>
+              <li>Muse 専用の領域で完全に分離</li>
+              <li>ゲートウェイが全定義を把握できる</li>
+            </ul>
+          </div>
+          <div class="cons">
+            <h4>短所</h4>
+            <ul>
+              <li>OpenCode の <code>--agent</code> が使えない</li>
+              <li>プロンプト注入の実装が必要</li>
+              <li>人間が手で編集しにくい</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <h2 class="section-title">詳細比較</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>観点</th>
+        <th>A案（OpenCode 設定）</th>
+        <th>B案（ゲートウェイ管理）</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>sungo の設定への影響</td>
+        <td class="lose">書き込める（危険）</td>
+        <td class="win">一切触れない</td>
+      </tr>
+      <tr>
+        <td>パストラバーサル耐性</td>
+        <td class="lose">脆弱（<code>../../</code> で突破可能）</td>
+        <td class="win">固定ディレクトリのみ</td>
+      </tr>
+      <tr>
+        <td>OpenCode の <code>--agent</code></td>
+        <td class="win">使える</td>
+        <td class="lose">使えない（プロンプト注入）</td>
+      </tr>
+      <tr>
+        <td>実装の単純さ</td>
+        <td class="win">単純</td>
+        <td class="neutral">やや複雑</td>
+      </tr>
+      <tr>
+        <td>人間による編集</td>
+        <td class="win">簡単</td>
+        <td class="lose">専用ツールが必要</td>
+      </tr>
+      <tr>
+        <td>エージェントの一覧管理</td>
+        <td class="lose">人間の設定と混ざる</td>
+        <td class="win">ゲートウェイが一元管理</td>
+      </tr>
+      <tr>
+        <td>バックアップ</td>
+        <td class="neutral">設定と一緒</td>
+        <td class="win">証跡と同じ 22TB HDD</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-title">セキュリティ上の決定的な違い</h2>
+
+  <div class="key-point">
+    <strong>A案の問題：</strong> Muse が <code>~/.config/opencode/</code> に書き込めるということは、
+    既存の設定（<code>opencode.jsonc</code>）を壊したり、他のエージェントの定義を改ざんしたりできるということです。
+    例えば <code>name="../../opencode"</code> のような入力を送れば、メイン設定を上書きできます。
+  </div>
+
+  <div class="key-point">
+    <strong>B案の利点：</strong> Muse は <code>/mnt/hdd22/agent-zerotrust/agents/</code> にしか書けません。
+    ここはゲートウェイ専用の領域で、OpenCode の設定とは完全に分離されています。
+    さらに、このディレクトリは 22TB の証跡ストアと同じ場所なので、バックアップも一元化できます。
+  </div>
+
+  <div class="verdict">
+    <h3>結論：B案を推奨</h3>
+    <p>
+      <strong>理由1（安全性）：</strong> Muse が sungo の設定領域に触れない。これはゼロトラストの原則
+      「最小権限」に直結します。
+    </p>
+    <p>
+      <strong>理由2（監査性）：</strong> エージェント定義をゲートウェイが一元管理するので、
+      「誰がいつ何を定義したか」が証跡として残せます。
+    </p>
+    <p>
+      <strong>理由3（実装コスト）：</strong> プロンプト注入は <code>instruction</code> の先頭に
+      定義を付けるだけなので、実装は10行程度です。
+    </p>
+    <p style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(16,185,129,0.2);">
+      <strong>B案の実装イメージ：</strong><br>
+      <code>create_worker_agent(name, description, prompt)</code> →
+      <code>/mnt/hdd22/agent-zerotrust/agents/muse-xxx.json</code> に保存<br>
+      <code>dispatch_worker_task(agent="muse-xxx", ...)</code> →
+      定義を読み込み、<code>instruction</code> の前にプロンプトを付けて実行
+    </p>
+  </div>
+
+</div>
+</body>
+</html>
