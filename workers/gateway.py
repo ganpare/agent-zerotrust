@@ -37,6 +37,7 @@ from pathlib import Path
 
 from evidence.telegram import TelegramConfigError, load_config, send_message
 from workers.source import describe_source
+from workers import jev_audit
 
 EVIDENCE_DIR = Path(
     os.environ.get(
@@ -209,13 +210,19 @@ def dispatch_task(
     task_id = f"TSK-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     now = time.time()
 
-    # Pre-execution safety screen
+    # Fast typed classification (Jev). normal/nsfw pass; the rest ask the human.
+    classification = jev_audit.classify(instruction)
     violation = check_instruction_safety(instruction)
+    if not violation and classification["needs_approval"]:
+        violation = (f"要承認: {jev_audit.label(classification['category'])}"
+                     f"（信頼度 {classification['confidence']:.2f}）")
     if violation:
         rec = {
             "task_id": task_id,
             "status": "blocked",
             "reason": violation,
+            "audit_category": classification["category"],
+            "audit_confidence": classification["confidence"],
             "agent": agent,
             "target": target,
             "workdir": resolved_dir,
@@ -270,6 +277,8 @@ def dispatch_task(
         "🚀 agent-zerotrust — ワーカータスク開始\n"
         f"タスクID: {task_id}\n"
         f"依頼元: {source_label}\n"
+        f"分類: {jev_audit.label(classification['category'])}"
+        f"（信頼度 {classification['confidence']:.2f}）\n"
         f"エージェント: {agent} (対象: {target})\n"
         f"作業場所: {resolved_dir}\n"
         f"依頼:\n{instruction}"
@@ -317,6 +326,16 @@ def dispatch_task(
         EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
         Path(task_state["output_file"]).write_text(combined, encoding="utf-8")
         full_output = combined.strip() if combined else "(no output)"
+
+        # Output classification: never hand secrets back to the agent.
+        out_class = jev_audit.classify(full_output)
+        if out_class["category"] in ("secrets", "monitoring"):
+            full_output = (
+                "[出力を遮断しました]\n"
+                f"分類: {jev_audit.label(out_class['category'])}"
+                f"（信頼度 {out_class['confidence']:.2f}）\n"
+                f"全文は証跡に保存されています: {task_state['output_file']}"
+            )
         preview = full_output[-1500:]
 
         with _TASKS_LOCK:
@@ -333,6 +352,8 @@ def dispatch_task(
             f"タスクID: {task_id} ({duration}秒)\n"
             f"依頼元: {source_label}\n"
             f"エージェント: {agent} (対象: {target})\n"
+            f"分類: {jev_audit.label(classification['category'])}"
+            f" / 出力={jev_audit.label(out_class['category'])}\n"
             f"結果:\n{full_output}"
         )
         done_event.set()
