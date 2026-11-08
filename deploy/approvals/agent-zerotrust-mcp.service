@@ -10,6 +10,7 @@ ExecStart=/usr/bin/python3 -u -m approvals.mcp_server
 Environment=APPROVAL_PORT=8930
 Environment=WARGATE_URL=https://127.0.0.1:8888
 Environment=APPROVAL_BIND=0.0.0.0
+Environment=INFISICAL_URL=http://192.168.0.43:8088
 Restart=on-failure
 RestartSec=10
 

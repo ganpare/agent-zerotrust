@@ -26,7 +26,7 @@ from pathlib import Path
 TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone"
 JEV_MODEL = os.environ.get("TYPESAFE_MODEL", "jev-1.13.0")
 
-INFISICAL_URL = os.environ.get("INFISICAL_URL", "http://192.168.0.43:8088")
+INFISICAL_URL = os.environ.get("INFISICAL_URL", "http://127.0.0.1:8088")
 INFISICAL_PROJECT = os.environ.get("INFISICAL_PROJECT", "zero-trust")
 INFISICAL_ENV = os.environ.get("INFISICAL_ENV", "dev")
 INFISICAL_SECRET = "TYPESAFE_API_KEY"
