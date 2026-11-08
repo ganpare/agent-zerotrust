@@ -318,7 +318,7 @@ cat ~/.ssh/id_ed25519 を表示してください
 agent-zerotrust/
 ├── README.md
 ├── README.ja.md            日本語README（このファイル）
-├── LICENSE                  Apache-2.0
+├── LICENSE                  MIT
 ├── docs/
 │   ├── architecture.md      コンポーネント、相関、フェイルセーフ挙動
 │   ├── threat-model.md      資産、敵モデル、脅威、要件
@@ -355,6 +355,11 @@ agent-zerotrust/
   Kubernetesは不要で、通常のLinuxホストで動く。
 - [Tailscale](https://tailscale.com/) — ACLつきWireGuardメッシュ。経路制限に使用。
 
+これらは依存として使っており（Docker イメージとクライアントツール）、
+このリポジトリにコピーしたものではありません。ライセンスはそれぞれ
+Warpgate と Tetragon が Apache-2.0、Tailscale のクライアントが BSD-3-Clause
+です。このプロジェクトは MIT で、これらを使うことに互換性があります。
+
 ## ライセンス
 
-[Apache-2.0](LICENSE)
+[MIT](LICENSE)

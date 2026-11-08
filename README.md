@@ -318,7 +318,7 @@ bound to that exact action; silence means deny. Design note:
 agent-zerotrust/
 ├── README.md
 ├── README.ja.md            Japanese README
-├── LICENSE                  Apache-2.0
+├── LICENSE                  MIT
 ├── docs/
 │   ├── architecture.md      components, correlation, fail-safe behavior
 │   ├── threat-model.md      assets, adversaries, threats, requirements
@@ -355,6 +355,11 @@ agent-zerotrust/
 - [Tailscale](https://tailscale.com/) — WireGuard mesh with ACLs, used to
   restrict the network path.
 
+These are used as dependencies (Docker images and client tools), not copied
+into this repository. Their licenses are their own: Warpgate and Tetragon are
+Apache-2.0, Tailscale's client is BSD-3-Clause. This project is MIT, which is
+compatible with using them.
+
 ## License
 
-[Apache-2.0](LICENSE)
+[MIT](LICENSE)
