@@ -146,7 +146,8 @@ def _tool_result(payload: dict) -> dict:
             "structuredContent": payload}
 
 
-def dispatch(method: str, params: dict, env: dict) -> tuple[dict | None, int]:
+def dispatch(method: str, params: dict, env: dict,
+             source_ip: str | None = None) -> tuple[dict | None, int]:
     """Returns (result, http_status). None result = no response body."""
     if method == "initialize":
         return {"protocolVersion": PROTOCOL_VERSION,
@@ -215,6 +216,7 @@ def dispatch(method: str, params: dict, env: dict) -> tuple[dict | None, int]:
                     target=target,
                     workdir=workdir,
                     wait_seconds=wait_s,
+                    source_ip=source_ip,
                 )
             except ValueError as exc:
                 return _error_result(str(exc)), 200
@@ -259,7 +261,8 @@ class Handler(BaseHTTPRequestHandler):
         is_request = "id" in message
         try:
             result, status = dispatch(method, message.get("params") or {},
-                                      self.env)
+                                      self.env,
+                                      source_ip=self.client_address[0])
         except Exception as exc:  # never leak internals
             result = {"error": {"code": -32603,
                                 "message": "internal error"}}

@@ -36,6 +36,7 @@ import uuid
 from pathlib import Path
 
 from evidence.telegram import TelegramConfigError, load_config, send_message
+from workers.source import describe_source
 
 EVIDENCE_DIR = Path(
     os.environ.get(
@@ -124,7 +125,8 @@ def build_agent_command(
 ) -> list[str]:
     """Build the headless CLI invocation for each supported coding agent."""
     if agent == "codex":
-        sb = sandbox_mode if sandbox_mode in ("read-only", "workspace-write") else "workspace-write"
+        sb = sandbox_mode if sandbox_mode in ("read-only", "workspace-write",
+                                             "danger-full-access") else "workspace-write"
         return [
             binary, "exec",
             "--sandbox", sb,
@@ -191,6 +193,7 @@ def dispatch_task(
     sandbox_mode: str = "workspace-write",
     wait_seconds: int = 25,
     timeout_seconds: int = 600,
+    source_ip: str | None = None,
 ) -> dict:
     """Validate, log, notify Telegram, and run a CLI coding agent task."""
     agents = discover_agents()
@@ -202,6 +205,7 @@ def dispatch_task(
         raise ValueError("target must be 'linux' or 'windows'")
 
     resolved_dir = validate_workdir(workdir)
+    source_label = describe_source(source_ip)
     task_id = f"TSK-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     now = time.time()
 
@@ -216,12 +220,15 @@ def dispatch_task(
             "target": target,
             "workdir": resolved_dir,
             "instruction": instruction,
+            "source": source_label,
+            "source_ip": source_ip,
             "created_at": now,
         }
         _append_event({"type": "task_blocked", **rec})
         _notify_telegram(
             "🚨 agent-zerotrust — ワーカー依頼をブロック\n"
             f"タスクID: {task_id}\n"
+            f"依頼元: {source_label}\n"
             f"エージェント: {agent} ({target})\n"
             f"理由: {violation}\n"
             f"依頼内容:\n{instruction}"
@@ -230,7 +237,15 @@ def dispatch_task(
 
     binary = agents[agent]
     full_prompt = wrap_prompt(instruction, target, resolved_dir)
-    cmd = build_agent_command(agent, binary, full_prompt, resolved_dir, sandbox_mode)
+    # `ssh` must read /etc/ssh/ssh_config.d, which Codex's workspace-write
+    # sandbox blocks. Windows delegation therefore runs Codex with
+    # danger-full-access; the pre-execution guard and the audit trail still
+    # apply, and the worker never receives the agent's own credentials.
+    effective_sandbox = sandbox_mode
+    if agent == "codex" and target == "windows":
+        effective_sandbox = "danger-full-access"
+    cmd = build_agent_command(agent, binary, full_prompt, resolved_dir,
+                              effective_sandbox)
 
     task_state = {
         "task_id": task_id,
@@ -239,6 +254,8 @@ def dispatch_task(
         "target": target,
         "workdir": resolved_dir,
         "instruction": instruction,
+        "source": source_label,
+        "source_ip": source_ip,
         "created_at": now,
         "ended_at": None,
         "returncode": None,
@@ -252,6 +269,7 @@ def dispatch_task(
     _notify_telegram(
         "🚀 agent-zerotrust — ワーカータスク開始\n"
         f"タスクID: {task_id}\n"
+        f"依頼元: {source_label}\n"
         f"エージェント: {agent} (対象: {target})\n"
         f"作業場所: {resolved_dir}\n"
         f"依頼:\n{instruction}"
@@ -313,6 +331,7 @@ def dispatch_task(
         _notify_telegram(
             f"{icon} agent-zerotrust — ワーカータスク完了 ({status})\n"
             f"タスクID: {task_id} ({duration}秒)\n"
+            f"依頼元: {source_label}\n"
             f"エージェント: {agent} (対象: {target})\n"
             f"結果:\n{full_output}"
         )

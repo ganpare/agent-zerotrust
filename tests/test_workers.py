@@ -82,3 +82,33 @@ class WorkerGatewayTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SourceIdentityTest(unittest.TestCase):
+    def test_local_and_unknown_labels(self):
+        from workers.source import describe_source
+        self.assertIn("ローカル", describe_source("127.0.0.1"))
+        self.assertIn("不明", describe_source(None))
+        label = describe_source("203.0.113.9")
+        self.assertIn("Tailscale未登録", label)
+
+    def test_dispatch_records_the_source(self):
+        import tempfile
+        from pathlib import Path
+        from unittest import mock
+        tmp = tempfile.TemporaryDirectory()
+        gateway.EVIDENCE_DIR = Path(tmp.name)
+        with mock.patch.object(gateway, "discover_agents", return_value={"agy": "/bin/echo"}), \
+             mock.patch.object(gateway, "_notify_telegram") as notify:
+            res = gateway.dispatch_task(
+                agent="agy", instruction="hi", target="linux",
+                workdir="/tmp", wait_seconds=5,
+                source_ip="127.0.0.1",
+            )
+        self.assertEqual(res["status"], "completed")
+        self.assertIn("ローカル", res["source"])
+        self.assertEqual(res["source_ip"], "127.0.0.1")
+        # the start notification mentions the source
+        first_call = notify.call_args_list[0][0][0]
+        self.assertIn("依頼元", first_call)
+        tmp.cleanup()
