@@ -26,6 +26,11 @@ from pathlib import Path
 TYPESAFE_URL = "https://api.typesafe.ai/v1/systemone"
 JEV_MODEL = os.environ.get("TYPESAFE_MODEL", "jev-1.13.0")
 
+# Roughly 200k characters fits the default 64k-token context for Japanese.
+MAX_STATE_CHARS = int(os.environ.get("JEV_MAX_STATE_CHARS", "200000"))
+# Above this, ask Jev for the 262k-token long context.
+LONG_CONTEXT_THRESHOLD = int(os.environ.get("JEV_LONG_CONTEXT_THRESHOLD", "60000"))
+
 INFISICAL_URL = os.environ.get("INFISICAL_URL", "http://127.0.0.1:8088")
 INFISICAL_PROJECT = os.environ.get("INFISICAL_PROJECT", "zero-trust")
 INFISICAL_ENV = os.environ.get("INFISICAL_ENV", "dev")
@@ -105,9 +110,17 @@ def classify(text: str, timeout: int = 15) -> dict:
             "error": f"APIキーを取得できませんでした: {type(exc).__name__}",
         }
 
+    # Jev is priced per input token at $0.042/Mtok, so a large state costs
+    # almost nothing. The default per-request context is 64k tokens; long
+    # context (262k) is enabled for very large inputs.
+    state = text[:MAX_STATE_CHARS]
+    headers = {"Authorization": f"Bearer {key}",
+               "Content-Type": "application/json"}
+    if len(state) > LONG_CONTEXT_THRESHOLD:
+        headers["TypeSafe-Danger-Zone-Long-Context"] = "true"
     body = json.dumps({
         "model": JEV_MODEL,
-        "state": text[:8000],
+        "state": state,
         "questions": {
             "category": {
                 "type": "choice",
@@ -117,9 +130,7 @@ def classify(text: str, timeout: int = 15) -> dict:
         },
     }).encode()
     req = urllib.request.Request(
-        TYPESAFE_URL, data=body, method="POST",
-        headers={"Authorization": f"Bearer {key}",
-                 "Content-Type": "application/json"})
+        TYPESAFE_URL, data=body, method="POST", headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
