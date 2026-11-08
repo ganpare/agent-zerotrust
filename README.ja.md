@@ -254,6 +254,39 @@ Tailscale の ACL で次のように書きます。
 | `list_worker_agents()` | 使える CLI エージェントを返す |
 | `dispatch_worker_task(agent, instruction, target, workdir)` | ローカルエージェントに委譲する |
 | `get_worker_task(task_id)` | タスクの状態と出力を取得する |
+| `create_worker_agent(name, description, prompt, model, mode)` | 再利用できる OpenCode エージェントを定義する |
+| `list_worker_agents_defined()` | ゲートウェイが作ったエージェントを一覧する |
+
+### エージェントを定義する
+
+エージェントは自分でワーカーを作れます。`create_worker_agent` は
+OpenCode のエージェント定義を `~/.config/opencode/agents/<name>.md` に
+書き出し、OpenCode が他のエージェントと同じように見つけて実行します。
+
+```json
+{
+  "name": "create_worker_agent",
+  "arguments": {
+    "name": "test-writer",
+    "description": "Python コードの単体テストを書く",
+    "prompt": "pytest のテストを書きます。境界条件を網羅します。ソースは変更しません。",
+    "model": "opencode/deepseek-v4.1-flash-free",
+    "mode": "subagent"
+  }
+}
+```
+
+ファイルを書くのはエージェントではなくゲートウェイで、書く前に4点を確かめます。
+
+| 確認 | 理由 |
+|---|---|
+| 名前が `[a-z0-9][a-z0-9-]{0,40}` に一致する | パストラバーサルを防ぎ、エージェント用ディレクトリの外に出さない |
+| プロンプトを Jev で分類する | 鍵や監視の停止を求める定義は Telegram でオーナーに確認する |
+| ファイルがオーナーの作ったものでないこと | オーナーが書いたエージェントは上書きしない |
+| ゲートウェイが作ったエージェントが20個未満であること | ディレクトリを埋め尽くせないようにする |
+
+削除のツールはありません。エージェントが作ったものは残ります。作成はすべて
+証拠ストアの `agents.jsonl` に追記されます。
 
 ### オーナーに届くもの
 

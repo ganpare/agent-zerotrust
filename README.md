@@ -252,6 +252,40 @@ from it — including the evidence store.
 | `list_worker_agents()` | which CLI agents are available |
 | `dispatch_worker_task(agent, instruction, target, workdir)` | delegate to a local agent |
 | `get_worker_task(task_id)` | fetch a task's status and output |
+| `create_worker_agent(name, description, prompt, model, mode)` | define a reusable OpenCode agent |
+| `list_worker_agents_defined()` | list the agents the gateway created |
+
+### Defining agents
+
+The agent can build its own workers. `create_worker_agent` writes an
+OpenCode agent definition to `~/.config/opencode/agents/<name>.md`, which
+OpenCode then discovers and runs like any other agent:
+
+```json
+{
+  "name": "create_worker_agent",
+  "arguments": {
+    "name": "test-writer",
+    "description": "Writes unit tests for Python code",
+    "prompt": "You write pytest tests. Cover edge cases. Do not modify source files.",
+    "model": "opencode/deepseek-v4.1-flash-free",
+    "mode": "subagent"
+  }
+}
+```
+
+The gateway, not the agent, writes the file, and it checks four things
+first:
+
+| Check | Why |
+|---|---|
+| the name matches `[a-z0-9][a-z0-9-]{0,40}` | no path traversal, no escaping the agent directory |
+| the prompt is classified by Jev | a definition asking for keys or a monitoring stop goes to the owner on Telegram |
+| the file was not written by the owner | an agent the owner wrote is never overwritten |
+| fewer than 20 gateway-created agents exist | the directory cannot be filled up |
+
+There is no delete tool: an agent the agent created stays. Every creation
+is appended to `agents.jsonl` in the evidence store.
 
 ### What the owner sees
 
