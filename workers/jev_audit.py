@@ -12,7 +12,8 @@ Five categories:
   monitoring  stops or tampers with monitoring   -> ask the human
   destructive destructive operations             -> ask the human
 
-The API key is read from Infisical at startup and cached in memory.
+The API key comes from TYPESAFE_API_KEY, or from Infisical when that is
+unset (credentials in INFISICAL_CRED_DIR, cached in memory for an hour).
 """
 from __future__ import annotations
 
@@ -31,10 +32,14 @@ MAX_STATE_CHARS = int(os.environ.get("JEV_MAX_STATE_CHARS", "200000"))
 # Above this, ask Jev for the 262k-token long context.
 LONG_CONTEXT_THRESHOLD = int(os.environ.get("JEV_LONG_CONTEXT_THRESHOLD", "60000"))
 
+# Infisical is optional: set TYPESAFE_API_KEY directly to skip it entirely.
+# Otherwise point INFISICAL_URL / INFISICAL_PROJECT at your instance and put
+# the machine-identity credentials in INFISICAL_CRED_DIR (client-id and
+# client-secret files).
 INFISICAL_URL = os.environ.get("INFISICAL_URL", "http://127.0.0.1:8088")
-INFISICAL_PROJECT = os.environ.get("INFISICAL_PROJECT", "zero-trust")
+INFISICAL_PROJECT = os.environ.get("INFISICAL_PROJECT", "")
 INFISICAL_ENV = os.environ.get("INFISICAL_ENV", "dev")
-INFISICAL_SECRET = "TYPESAFE_API_KEY"
+INFISICAL_SECRET = os.environ.get("INFISICAL_SECRET", "TYPESAFE_API_KEY")
 CRED_DIR = Path(os.environ.get(
     "INFISICAL_CRED_DIR", str(Path.home() / ".config/infisical")))
 
@@ -80,6 +85,10 @@ def get_api_key() -> str:
     if _key_cache["value"] and now - _key_cache["at"] < _KEY_TTL:
         return _key_cache["value"]
 
+    if not INFISICAL_PROJECT:
+        raise AuditError(
+            "Infisical is not configured: set TYPESAFE_API_KEY directly, or "
+            "set INFISICAL_PROJECT (and INFISICAL_URL / INFISICAL_CRED_DIR)")
     token = _infisical_token()
     url = (f"{INFISICAL_URL}/api/v3/secrets/raw/{INFISICAL_SECRET}"
            f"?workspaceSlug={INFISICAL_PROJECT}&environment={INFISICAL_ENV}")
