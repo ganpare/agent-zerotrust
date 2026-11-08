@@ -11,6 +11,7 @@ Thumbs.db
 # never commit real keys, tokens, or captured evidence.
 *.pem
 *.key
+*.crt
 .env
 .env.*
 
