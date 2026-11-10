@@ -12,6 +12,19 @@ proving, after the fact, exactly what they did. Beyond SSH, it can *delegate*
 work to local CLI agents (Codex, DSH, OpenCode, Command Code, Mistral Vibe,
 Antigravity) without ever handing the remote agent their credentials.
 
+| What you get | How |
+|---|---|
+| **Every session recorded** | Warpgate SSH bastion — identity, replay, full transcript |
+| **Every syscall observed** | Tetragon eBPF — exec, file, network, kernel-side, agent-only |
+| **Risky requests classified** | Jev (TypeSafe System One) — five categories in 150–300 ms, no LLM drift |
+| **A human decides the risky ones** | Telegram buttons — approve, deny, or silence means no |
+| **Privileged actions bounded** | Signed, time-limited leases redeemed by a root broker |
+| **Evidence the agent cannot reach** | One-way stream to a store outside its network path |
+
+Built on Tailscale (path restriction), Warpgate (SSH bastion), Tetragon
+(eBPF), and the Model Context Protocol. Runs on a plain Linux host with
+Docker — no Kubernetes.
+
 > **Status: deployed and running.** Phase 1 (auditable SSH access) and
 > Phase 2 (auto-review, Telegram briefings, MCP approvals, LLM backends) are
 > complete; Phase 3 (privileged broker + signed permission leases) is core
